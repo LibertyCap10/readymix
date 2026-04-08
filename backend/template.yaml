@@ -334,6 +334,7 @@ Resources:
               "type": "metric",
               "width": 12, "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Lambda Invocations",
                 "metrics": [
                   ["AWS/Lambda", "Invocations", "FunctionName", "${OrdersFunction}"],
@@ -347,6 +348,7 @@ Resources:
               "type": "metric",
               "width": 12, "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Lambda Errors",
                 "metrics": [
                   ["AWS/Lambda", "Errors", "FunctionName", "${OrdersFunction}"],
@@ -359,6 +361,7 @@ Resources:
               "type": "metric",
               "width": 12, "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "API Gateway Latency (p50 / p99)",
                 "metrics": [
                   ["AWS/ApiGateway", "Latency", "ApiName", "readymix-${Environment}", { "stat": "p50" }],
@@ -371,6 +374,7 @@ Resources:
               "type": "metric",
               "width": 12, "height": 6,
               "properties": {
+                "region": "${AWS::Region}",
                 "title": "Orders Dispatched (custom metric)",
                 "metrics": [
                   ["ReadyMix", "OrdersDispatched", "Environment", "${Environment}"]
@@ -380,6 +384,75 @@ Resources:
             }
           ]
         }
+
+ # ═══════════════════════════════════════════
+  # FRONTEND HOSTING
+  # ═══════════════════════════════════════════
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub readymix-frontend-${Environment}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
+
+  FrontendOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub readymix-oac-${Environment}
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+           - readymix.earth
+        ViewerCertificate:
+           AcmCertificateArn: arn:aws:acm:us-east-1:357912269728:certificate/bbcd8c2f-3de2-4e50-830f-320e0a4edccf
+           SslSupportMethod: sni-only
+           MinimumProtocolVersion: TLSv1.2_2021
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            OriginAccessControlId: !Ref FrontendOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: redirect-to-https
+          TargetOriginId: S3Origin
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
+          Compress: true
+        CustomErrorResponses:
+          - ErrorCode: 403          # S3 returns 403 for missing files
+            ResponseCode: 200       # SPA fallback
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Outputs — values printed after `sam deploy` and available via CloudFormation
@@ -408,3 +481,10 @@ Outputs:
     Value: !Ref PlantsTable
     Export:
       Name: !Sub readymix-plants-table-${Environment}
+
+  FrontendUrl:
+    Value: !Sub https://${FrontendDistribution.DomainName}
+  FrontendBucketName:
+    Value: !Ref FrontendBucket
+  FrontendDistributionId:
+      Value: !Ref FrontendDistribution
