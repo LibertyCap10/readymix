@@ -28,6 +28,14 @@ import {
   VALID_STATUSES,
 } from '/opt/nodejs/dynamo-client.mjs';
 
+// Lazy import to avoid module-load failures when Aurora isn't configured
+let _aurora;
+async function aurora() {
+  if (!_aurora) _aurora = await import('/opt/nodejs/aurora-client.mjs');
+  return _aurora;
+}
+
+
 import {
   ok,
   created,
@@ -51,6 +59,10 @@ export async function handler(event) {
     if (method === 'GET'   && path === '/orders/{ticketId}') return getOrder(event);
     if (method === 'POST'  && path === '/orders')            return createOrder(event);
     if (method === 'PATCH' && path === '/orders/{ticketId}') return updateOrder(event);
+    if (method === 'GET'   && path === '/customers/search')   return searchCustomers(event);
+    if (method === 'GET'   && path === '/plants')              return listPlants(event);
+    if (method === 'GET'   && path === '/mix-designs')         return listMixDesigns(event);
+    if (method === 'GET'   && path === '/customers/{customerId}/job-sites') return listJobSites(event);
 
     return badRequest(`Route not found: ${method} ${path}`);
   } catch (err) {
@@ -369,4 +381,124 @@ function getValidNext(status) {
     cancelled:  [],
   };
   return map[status] ?? [];
+}
+
+// ─── GET /customers/search ───────────────────────────────────────────────
+//
+// Debounced typeahead for the New Order form.
+// Queries Aurora customers table with ILIKE fuzzy matching.
+
+async function searchCustomers(event) {
+  const { q } = getQueryParams(event);
+
+  const { query: q_, param: p_ } = await aurora();
+
+  // If no search term, return all active customers (for initial dropdown)
+  if (!q || q.length < 1) {
+    const { rows } = await q_(
+      `SELECT id, name, account_number AS "accountNumber", city, state
+       FROM customers WHERE is_active = true ORDER BY name LIMIT 20`
+    );
+    return ok({ customers: rows });
+  }
+
+  const { rows } = await q_(
+    `SELECT
+       id,
+       name,
+       account_number AS "accountNumber",
+       city,
+       state
+     FROM customers
+     WHERE is_active = true
+       AND name ILIKE '%' || :term || '%'
+     ORDER BY name
+     LIMIT 10`,
+    [p_('term', q)]
+  );
+
+  return ok({ customers: rows });
+}
+
+// ─── GET /plants ─────────────────────────────────────────────────────────
+
+async function listPlants() {
+  const { query: q_, } = await aurora();
+  const { rows } = await q_(
+    `SELECT
+       code AS "plantId",
+       name,
+       address,
+       city,
+       state,
+       phone,
+       lat AS "latitude",
+       lng AS "longitude"
+     FROM plants
+     WHERE is_active = true
+     ORDER BY name`
+  );
+
+  return ok({ plants: rows });
+}
+
+// ─── GET /mix-designs ────────────────────────────────────────────────────
+
+async function listMixDesigns(event) {
+  const { plantId } = getQueryParams(event);
+  const { query: q_, param: p_ } = await aurora();
+
+  let sql = `
+    SELECT
+      md.id   AS "mixDesignId",
+      md.name,
+      md.code,
+      md.psi_rating   AS "psi",
+      md.slump_min    AS "slumpMin",
+      md.slump_max    AS "slumpMax"
+    FROM mix_designs md`;
+
+  const params = [];
+
+  if (plantId) {
+    sql += `
+    JOIN plant_mix_designs pmd ON pmd.mix_design_id = md.id
+    WHERE pmd.plant_id = (SELECT id FROM plants WHERE code = :plantId)
+      AND md.is_active = true`;
+    params.push(p_('plantId', plantId));
+  } else {
+    sql += `
+    WHERE md.is_active = true`;
+  }
+
+  sql += `
+    ORDER BY md.psi_rating, md.name`;
+
+  const { rows } = await q_(sql, params);
+
+  return ok({ mixDesigns: rows });
+}
+
+// ─── GET /customers/{customerId}/job-sites ───────────────────────────────
+
+async function listJobSites(event) {
+  const { customerId } = getPathParams(event);
+  if (!customerId) return badRequest('customerId path param is required');
+
+  const { query: q_, param: p_ } = await aurora();
+  const { rows } = await q_(
+    `SELECT
+       id        AS "siteId",
+       name,
+       address,
+       city,
+       state
+     FROM customer_job_sites
+     WHERE customer_id = :customerId::UUID
+       AND is_active = true
+     ORDER BY name`,
+    [p_('customerId', customerId)]
+  );
+
+  return ok({ jobSites: rows });
 }

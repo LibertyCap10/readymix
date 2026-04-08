@@ -1,8 +1,8 @@
 /**
- * Aurora PostgreSQL Client — RDS Data API wrapper
+ * Aurora PostgreSQL Client — RDS Data API wrapper with local PG fallback.
  *
- * Provides a clean interface for executing SQL against Aurora Serverless v2
- * via the RDS Data API. No VPC, no connection pool, no pg driver needed.
+ * In AWS: uses the RDS Data API (no VPC, no connection pool).
+ * Locally: when USE_LOCAL_PG=true, connects to a Docker Postgres via the pg driver.
  *
  * Exports:
  *   query(sql, parameters)     — execute a single SQL statement
@@ -10,27 +10,72 @@
  *   param(name, value)         — build a typed Data API parameter
  */
 
-import {
-  RDSDataClient,
-  ExecuteStatementCommand,
-  BeginTransactionCommand,
-  CommitTransactionCommand,
-  RollbackTransactionCommand,
-} from '@aws-sdk/client-rds-data';
+// Check at call time, not module load time (SAM local env var timing)
+function isLocal() { return process.env.USE_LOCAL_PG === 'true'; }
 
-const client = new RDSDataClient({});
+// Lazy-initialized clients
+let _pgPool = null;
+let _rdsClient = null;
 
-const CLUSTER_ARN = process.env.AURORA_CLUSTER_ARN;
-const SECRET_ARN  = process.env.AURORA_SECRET_ARN;
-const DATABASE    = process.env.AURORA_DATABASE || 'readymix';
+async function getPgPool() {
+  if (!_pgPool) {
+    const pg = await import('pg');
+    const Pool = pg.default?.Pool ?? pg.Pool;
+    _pgPool = new Pool({ connectionString: process.env.PG_CONNECTION_STRING });
+  }
+  return _pgPool;
+}
+
+async function getRdsClient() {
+  if (!_rdsClient) {
+    const { RDSDataClient } = await import('@aws-sdk/client-rds-data');
+    _rdsClient = new RDSDataClient({});
+  }
+  return _rdsClient;
+}
+
+function getClusterArn() { return process.env.AURORA_CLUSTER_ARN; }
+function getSecretArn()  { return process.env.AURORA_SECRET_ARN; }
+function getDatabase()   { return process.env.AURORA_DATABASE || 'readymix'; }
+
+// ── Named param → positional param conversion for pg ─────────────────────
+
+function convertParams(sql, parameters) {
+  const values = [];
+  let convertedSql = sql;
+  for (const p of parameters) {
+    values.push(extractParamValue(p));
+    convertedSql = convertedSql.replace(new RegExp(`:${p.name}\\b`, 'g'), `$${values.length}`);
+  }
+  return { sql: convertedSql, values };
+}
+
+function extractParamValue(p) {
+  const v = p.value;
+  if (v.isNull) return null;
+  if (v.stringValue !== undefined) return v.stringValue;
+  if (v.longValue !== undefined) return v.longValue;
+  if (v.doubleValue !== undefined) return v.doubleValue;
+  if (v.booleanValue !== undefined) return v.booleanValue;
+  return null;
+}
 
 // ── Execute a single SQL statement ───────────────────────────────────────
 
 export async function query(sql, parameters = []) {
+  if (isLocal()) {
+    const pool = await getPgPool();
+    const { sql: pgSql, values } = convertParams(sql, parameters);
+    const result = await pool.query(pgSql, values);
+    return { rows: result.rows, rowCount: result.rowCount };
+  }
+
+  const client = await getRdsClient();
+  const { ExecuteStatementCommand } = await import('@aws-sdk/client-rds-data');
   const result = await client.send(new ExecuteStatementCommand({
-    resourceArn: CLUSTER_ARN,
-    secretArn:   SECRET_ARN,
-    database:    DATABASE,
+    resourceArn: getClusterArn(),
+    secretArn:   getSecretArn(),
+    database:    getDatabase(),
     sql,
     parameters,
     includeResultMetadata: true,
@@ -42,19 +87,48 @@ export async function query(sql, parameters = []) {
 // ── Execute multiple statements in a transaction ─────────────────────────
 
 export async function transaction(statements) {
+  if (isLocal()) {
+    const pool = await getPgPool();
+    const pgClient = await pool.connect();
+    try {
+      await pgClient.query('BEGIN');
+      const results = [];
+      for (const { sql, parameters = [] } of statements) {
+        const { sql: pgSql, values } = convertParams(sql, parameters);
+        const result = await pgClient.query(pgSql, values);
+        results.push({ rows: result.rows, rowCount: result.rowCount });
+      }
+      await pgClient.query('COMMIT');
+      return results;
+    } catch (err) {
+      await pgClient.query('ROLLBACK');
+      throw err;
+    } finally {
+      pgClient.release();
+    }
+  }
+
+  const client = await getRdsClient();
+  const {
+    ExecuteStatementCommand,
+    BeginTransactionCommand,
+    CommitTransactionCommand,
+    RollbackTransactionCommand,
+  } = await import('@aws-sdk/client-rds-data');
+
   const { transactionId } = await client.send(new BeginTransactionCommand({
-    resourceArn: CLUSTER_ARN,
-    secretArn:   SECRET_ARN,
-    database:    DATABASE,
+    resourceArn: getClusterArn(),
+    secretArn:   getSecretArn(),
+    database:    getDatabase(),
   }));
 
   try {
     const results = [];
     for (const { sql, parameters = [] } of statements) {
       const result = await client.send(new ExecuteStatementCommand({
-        resourceArn: CLUSTER_ARN,
-        secretArn:   SECRET_ARN,
-        database:    DATABASE,
+        resourceArn: getClusterArn(),
+        secretArn:   getSecretArn(),
+        database:    getDatabase(),
         sql,
         parameters,
         transactionId,
@@ -64,16 +138,16 @@ export async function transaction(statements) {
     }
 
     await client.send(new CommitTransactionCommand({
-      resourceArn: CLUSTER_ARN,
-      secretArn:   SECRET_ARN,
+      resourceArn: getClusterArn(),
+      secretArn:   getSecretArn(),
       transactionId,
     }));
 
     return results;
   } catch (err) {
     await client.send(new RollbackTransactionCommand({
-      resourceArn: CLUSTER_ARN,
-      secretArn:   SECRET_ARN,
+      resourceArn: getClusterArn(),
+      secretArn:   getSecretArn(),
       transactionId,
     }));
     throw err;
@@ -81,8 +155,6 @@ export async function transaction(statements) {
 }
 
 // ── Format Data API response into plain objects ──────────────────────────
-// The Data API returns typed fields like { stringValue: "foo" }.
-// This converts them to plain { column_name: "foo" } objects.
 
 function formatResult(result) {
   if (!result.columnMetadata || !result.records) {
@@ -112,7 +184,6 @@ function extractValue(field) {
 }
 
 // ── Parameter helpers ────────────────────────────────────────────────────
-// The Data API requires typed parameters. This helper makes it less verbose.
 
 export function param(name, value) {
   if (value === null || value === undefined) {

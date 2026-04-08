@@ -13,7 +13,13 @@
  * only the internals changed from DynamoDB scans to SQL aggregations.
  */
 
-import { query, param } from '/opt/nodejs/aurora-client.mjs';
+// Lazy import to avoid module-load failures in SAM local
+let _aurora;
+async function aurora() {
+  if (!_aurora) _aurora = await import('/opt/nodejs/aurora-client.mjs');
+  return _aurora;
+}
+
 
 import {
   ok,
@@ -32,6 +38,8 @@ export async function handler(event) {
     if (method === 'GET' && path === '/analytics/volume')      return await getVolume(event);
     if (method === 'GET' && path === '/analytics/utilization') return await getUtilization(event);
     if (method === 'GET' && path === '/analytics/cycle-times') return await getCycleTimes(event);
+    if (method === 'GET' && path === '/analytics/customers')   return await getCustomers(event);
+    if (method === 'GET' && path === '/analytics/drivers')     return await getDrivers(event);
 
     return badRequest(`Route not found: ${method} ${path}`);
   } catch (err) {
@@ -56,6 +64,7 @@ async function getVolume(event) {
   const days = parseDayRange(range);
   if (!days) return badRequest('range must be in format Nd (e.g., 7d, 30d)');
 
+  const { query, param } = await aurora();
   const { rows } = await query(
     `SELECT
        TO_CHAR(DATE(completed_at), 'YYYY-MM-DD') AS date,
@@ -91,6 +100,7 @@ async function getUtilization(event) {
   const { plantId } = getQueryParams(event);
   if (!plantId) return badRequest('plantId is required');
 
+  const { query, param } = await aurora();
   const { rows } = await query(
     `WITH plant_trucks AS (
        SELECT COUNT(*) AS total
@@ -139,6 +149,7 @@ async function getCycleTimes(event) {
   const days = parseDayRange(range);
   if (!days) return badRequest('range must be in format Nd (e.g., 7d, 30d)');
 
+  const { query, param } = await aurora();
   const { rows } = await query(
     `SELECT
        TO_CHAR(DATE(completed_at), 'YYYY-MM-DD') AS date,
@@ -179,4 +190,89 @@ function parseDayRange(range) {
   if (!match) return null;
   const days = parseInt(match[1], 10);
   return days >= 1 && days <= 365 ? days : null;
+}
+
+// ─── GET /analytics/customers ────────────────────────────────────────────
+//
+// Customer scorecard from the v_customer_scorecard view.
+
+async function getCustomers(event) {
+  const { plantId } = getQueryParams(event);
+  if (!plantId) return badRequest('plantId is required');
+
+  const { query, param } = await aurora();
+  const { rows } = await query(
+    `SELECT
+       c.name,
+       COUNT(dh.id)                            AS "totalOrders",
+       ROUND(SUM(dh.volume_yards)::NUMERIC, 1) AS "totalVolume",
+       ROUND(SUM(dh.total_price)::NUMERIC, 2)  AS "revenue",
+       ROUND(AVG(dh.cycle_time_minutes), 1)    AS "avgCycleTime",
+       ROUND(
+         100.0 * COUNT(*) FILTER (WHERE dh.was_on_time = true) / NULLIF(COUNT(*), 0),
+         1
+       ) AS "onTimePct",
+       MAX(dh.completed_at)::TEXT              AS "lastDelivery"
+     FROM delivery_history dh
+     JOIN customers c ON dh.customer_id = c.id
+     WHERE dh.plant_id = (SELECT id FROM plants WHERE code = :plantId)
+       AND dh.final_status = 'complete'
+     GROUP BY c.id, c.name
+     ORDER BY SUM(dh.volume_yards) DESC`,
+    [param('plantId', plantId)]
+  );
+
+  const customers = rows.map(r => ({
+    name: r.name,
+    totalOrders: Number(r.totalOrders) || 0,
+    totalVolume: parseFloat(r.totalVolume) || 0,
+    revenue: parseFloat(r.revenue) || 0,
+    avgCycleTime: parseFloat(r.avgCycleTime) || 0,
+    onTimePct: parseFloat(r.onTimePct) || 0,
+    lastDelivery: r.lastDelivery,
+  }));
+
+  return ok({ plantId, customers });
+}
+
+// ─── GET /analytics/drivers ──────────────────────────────────────────────
+//
+// Driver performance leaderboard from delivery_history + drivers table.
+
+async function getDrivers(event) {
+  const { plantId } = getQueryParams(event);
+  if (!plantId) return badRequest('plantId is required');
+
+  const { query, param } = await aurora();
+  const { rows } = await query(
+    `SELECT
+       d.first_name || ' ' || d.last_name     AS "name",
+       COUNT(dh.id)                            AS "deliveries",
+       ROUND(SUM(dh.volume_yards)::NUMERIC, 1) AS "totalVolume",
+       ROUND(AVG(dh.cycle_time_minutes), 1)    AS "avgCycleTime",
+       ROUND(
+         100.0 * COUNT(*) FILTER (WHERE dh.was_on_time = true) / NULLIF(COUNT(*), 0),
+         1
+       ) AS "onTimePct",
+       p.name                                  AS "plant"
+     FROM delivery_history dh
+     JOIN drivers d ON dh.driver_id = d.id
+     JOIN plants p ON dh.plant_id = p.id
+     WHERE dh.plant_id = (SELECT id FROM plants WHERE code = :plantId)
+       AND dh.final_status = 'complete'
+     GROUP BY d.id, d.first_name, d.last_name, p.name
+     ORDER BY COUNT(dh.id) DESC`,
+    [param('plantId', plantId)]
+  );
+
+  const drivers = rows.map(r => ({
+    name: r.name,
+    deliveries: Number(r.deliveries) || 0,
+    totalVolume: parseFloat(r.totalVolume) || 0,
+    avgCycleTime: parseFloat(r.avgCycleTime) || 0,
+    onTimePct: parseFloat(r.onTimePct) || 0,
+    plant: r.plant,
+  }));
+
+  return ok({ plantId, drivers });
 }

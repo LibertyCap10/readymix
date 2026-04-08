@@ -24,6 +24,8 @@ Globals:
         AURORA_CLUSTER_ARN: !GetAtt AuroraCluster.DBClusterArn
         AURORA_SECRET_ARN:  !GetAtt AuroraCluster.MasterUserSecret.SecretArn
         AURORA_DATABASE:    readymix
+        USE_LOCAL_PG:       ""
+        PG_CONNECTION_STRING: ""
   Api:
     Cors:
       AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
@@ -309,6 +311,26 @@ Resources:
           Properties:
             Path: /orders/{ticketId}
             Method: patch
+        SearchCustomers:
+          Type: Api
+          Properties:
+            Path: /customers/search
+            Method: get
+        ListPlants:
+          Type: Api
+          Properties:
+            Path: /plants
+            Method: get
+        ListMixDesigns:
+          Type: Api
+          Properties:
+            Path: /mix-designs
+            Method: get
+        ListJobSites:
+          Type: Api
+          Properties:
+            Path: /customers/{customerId}/job-sites
+            Method: get
 
   OrdersFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -413,6 +435,16 @@ Resources:
           Type: Api
           Properties:
             Path: /analytics/cycle-times
+            Method: get
+        GetCustomers:
+          Type: Api
+          Properties:
+            Path: /analytics/customers
+            Method: get
+        GetDrivers:
+          Type: Api
+          Properties:
+            Path: /analytics/drivers
             Method: get
 
   AnalyticsFunctionLogGroup:
