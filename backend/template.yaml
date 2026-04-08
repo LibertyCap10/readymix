@@ -429,8 +429,9 @@ Resources:
       DistributionConfig:
         Aliases:
            - readymix.earth
+           - www.readymix.earth
         ViewerCertificate:
-           AcmCertificateArn: arn:aws:acm:us-east-1:357912269728:certificate/bbcd8c2f-3de2-4e50-830f-320e0a4edccf
+           AcmCertificateArn: arn:aws:acm:us-east-1:357912269728:certificate/101e74d0-60bf-486e-962e-58f8f2795ec1
            SslSupportMethod: sni-only
            MinimumProtocolVersion: TLSv1.2_2021
         Enabled: true
