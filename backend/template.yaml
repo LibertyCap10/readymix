@@ -1,0 +1,410 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ReadyMix Dashboard — Concrete Delivery Management
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Globals — defaults applied to every Lambda Function and API
+# ─────────────────────────────────────────────────────────────────────────────
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 10
+    MemorySize: 256
+    Architectures:
+      - arm64                         # Graviton2 — ~20% cheaper, ~20% faster than x86
+    Layers:
+      - !Ref SharedLayer
+    Environment:
+      Variables:
+        ORDERS_TABLE:  !Ref OrdersTable
+        TRUCKS_TABLE:  !Ref TrucksTable
+        PLANTS_TABLE:  !Ref PlantsTable
+        REGION:        !Ref AWS::Region
+        ENVIRONMENT:   !Ref Environment
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+      AllowOrigin:  "'*'"              # Lock to your CloudFront domain in prod
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters — configurable per environment
+# ─────────────────────────────────────────────────────────────────────────────
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Deployment environment (used to namespace all resource names)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resources
+# ─────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DYNAMODB TABLES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ── Active Orders ──────────────────────────────────────────────────────────
+  # Access patterns:
+  #   Get today's orders for a plant  → PK=plantId, SK begins_with "2026-03-31"
+  #   Get single order                → PK=plantId, SK="2026-03-31#TKT-0042"
+  #   Filter by status                → GSI status-index: PK=plantId, SK=status
+  #   Sort by requested time          → GSI time-index:   PK=plantId, SK=requestedTime
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub readymix-orders-${Environment}
+      BillingMode: PAY_PER_REQUEST    # On-demand — no capacity planning needed
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: plantId
+          AttributeType: S
+        - AttributeName: orderDateTicket  # "2026-03-31#TKT-2026-0001"
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: requestedTime
+          AttributeType: S
+      KeySchema:
+        - AttributeName: plantId
+          KeyType: HASH
+        - AttributeName: orderDateTicket
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: plantId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: time-index
+          KeySchema:
+            - AttributeName: plantId
+              KeyType: HASH
+            - AttributeName: requestedTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ── Truck Status ───────────────────────────────────────────────────────────
+  # Access patterns:
+  #   Get single truck status         → PK=truckId
+  #   Get all trucks for a plant      → GSI plant-status-index: PK=plantId
+  #   Get available trucks for plant  → GSI plant-status-index: PK=plantId, SK=available
+  TrucksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub readymix-trucks-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: truckId
+          AttributeType: S
+        - AttributeName: plantId
+          AttributeType: S
+        - AttributeName: currentStatus
+          AttributeType: S
+      KeySchema:
+        - AttributeName: truckId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: plant-status-index
+          KeySchema:
+            - AttributeName: plantId
+              KeyType: HASH
+            - AttributeName: currentStatus
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ── Plants (reference data) ────────────────────────────────────────────────
+  # Access patterns:
+  #   Get plant by ID                 → PK=plantId
+  #   List all plants                 → Scan (small table, infrequent)
+  PlantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub readymix-plants-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: plantId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: plantId
+          KeyType: HASH
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SHARED LAMBDA LAYER
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # All three Lambda functions share this layer for DynamoDB client utilities,
+  # HTTP response helpers, and logging. Keeps each service handler focused on
+  # business logic rather than boilerplate.
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub readymix-shared-${Environment}
+      Description: DynamoDB Document Client wrapper, HTTP response helpers, logger
+      ContentUri: layers/shared/
+      CompatibleRuntimes:
+        - nodejs20.x
+      RetentionPolicy: Delete       # Clean up old versions on deploy
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ORDERS SERVICE
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  OrdersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub readymix-orders-${Environment}
+      Description: CRUD for delivery tickets — active orders in DynamoDB
+      Handler: index.handler
+      CodeUri: services/orders/
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlantsTable
+      Events:
+        ListOrders:
+          Type: Api
+          Properties:
+            Path: /orders
+            Method: get
+        GetOrder:
+          Type: Api
+          Properties:
+            Path: /orders/{ticketId}
+            Method: get
+        CreateOrder:
+          Type: Api
+          Properties:
+            Path: /orders
+            Method: post
+        UpdateOrder:
+          Type: Api
+          Properties:
+            Path: /orders/{ticketId}
+            Method: patch
+
+  OrdersFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/readymix-orders-${Environment}
+      RetentionInDays: 14
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FLEET SERVICE
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  FleetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub readymix-fleet-${Environment}
+      Description: Real-time truck status — reads/writes TrucksTable in DynamoDB
+      Handler: index.handler
+      CodeUri: services/fleet/
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrucksTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlantsTable
+      Events:
+        ListFleet:
+          Type: Api
+          Properties:
+            Path: /fleet
+            Method: get
+        GetTruck:
+          Type: Api
+          Properties:
+            Path: /fleet/{truckId}
+            Method: get
+        UpdateTruckStatus:
+          Type: Api
+          Properties:
+            Path: /fleet/{truckId}/status
+            Method: patch
+
+  FleetFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/readymix-fleet-${Environment}
+      RetentionInDays: 14
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ANALYTICS SERVICE  (Phase 5 adds Aurora queries; DynamoDB aggregations here)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  AnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub readymix-analytics-${Environment}
+      Description: Operational analytics — aggregates from DynamoDB (Aurora added Phase 5)
+      Handler: index.handler
+      CodeUri: services/analytics/
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref OrdersTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref TrucksTable
+        - CloudWatchPutMetricPolicy: {}
+      Events:
+        GetVolume:
+          Type: Api
+          Properties:
+            Path: /analytics/volume
+            Method: get
+        GetUtilization:
+          Type: Api
+          Properties:
+            Path: /analytics/utilization
+            Method: get
+        GetCycleTimes:
+          Type: Api
+          Properties:
+            Path: /analytics/cycle-times
+            Method: get
+
+  AnalyticsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/readymix-analytics-${Environment}
+      RetentionInDays: 14
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CLOUDWATCH ALARMS
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # Alarm fires when Orders Lambda throws >5 errors in a 5-minute window.
+  # In production you'd route this to SNS → PagerDuty or email.
+  OrdersErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub readymix-orders-errors-${Environment}
+      AlarmDescription: Orders Lambda error rate exceeded threshold (>5 errors/5 min)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref OrdersFunction
+      Statistic: Sum
+      Period: 300        # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # Custom metric alarm — published by the Analytics Lambda after aggregation.
+  # Fires when average cycle time exceeds the 90-minute benchmark.
+  HighCycleTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub readymix-high-cycle-time-${Environment}
+      AlarmDescription: Average delivery cycle time exceeded 90-minute benchmark
+      Namespace: ReadyMix
+      MetricName: AverageCycleTimeMinutes
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      Statistic: Average
+      Period: 900        # 15 minutes
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # CLOUDWATCH DASHBOARD
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub readymix-${Environment}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Invocations",
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${OrdersFunction}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${FleetFunction}"],
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${AnalyticsFunction}"]
+                ],
+                "period": 300, "stat": "Sum", "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Errors",
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${OrdersFunction}"],
+                  ["AWS/Lambda", "Errors", "FunctionName", "${FleetFunction}"]
+                ],
+                "period": 300, "stat": "Sum", "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "width": 12, "height": 6,
+              "properties": {
+                "title": "API Gateway Latency (p50 / p99)",
+                "metrics": [
+                  ["AWS/ApiGateway", "Latency", "ApiName", "readymix-${Environment}", { "stat": "p50" }],
+                  ["AWS/ApiGateway", "Latency", "ApiName", "readymix-${Environment}", { "stat": "p99" }]
+                ],
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "width": 12, "height": 6,
+              "properties": {
+                "title": "Orders Dispatched (custom metric)",
+                "metrics": [
+                  ["ReadyMix", "OrdersDispatched", "Environment", "${Environment}"]
+                ],
+                "period": 300, "stat": "Sum"
+              }
+            }
+          ]
+        }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outputs — values printed after `sam deploy` and available via CloudFormation
+# ─────────────────────────────────────────────────────────────────────────────
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL — set as VITE_API_BASE_URL in frontend
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+    Export:
+      Name: !Sub readymix-api-url-${Environment}
+
+  OrdersTableName:
+    Description: DynamoDB table name for active orders
+    Value: !Ref OrdersTable
+    Export:
+      Name: !Sub readymix-orders-table-${Environment}
+
+  TrucksTableName:
+    Description: DynamoDB table name for real-time truck status
+    Value: !Ref TrucksTable
+    Export:
+      Name: !Sub readymix-trucks-table-${Environment}
+
+  PlantsTableName:
+    Description: DynamoDB table name for plant reference data
+    Value: !Ref PlantsTable
+    Export:
+      Name: !Sub readymix-plants-table-${Environment}

@@ -1,0 +1,6 @@
+{
+  "name": "readymix-analytics-service",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ReadyMix Analytics Lambda — operational metrics from DynamoDB (Aurora added Phase 5)"
+}

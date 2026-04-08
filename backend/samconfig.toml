@@ -1,0 +1,38 @@
+# SAM CLI deployment configuration.
+# After running `sam deploy --guided` once, these values are saved here so
+# subsequent deploys only need `sam deploy` (no flags required).
+#
+# Run your first deploy:
+#   sam build && sam deploy --guided
+#
+# Subsequent deploys:
+#   sam build && sam deploy
+
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "readymix-dashboard"
+region = "us-east-1"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+# These values are set by --guided on first deploy.
+# Fill in your actual account/region/bucket values.
+capabilities      = "CAPABILITY_IAM"
+confirm_changeset = true
+fail_on_empty_changeset = false
+
+# ── Fill these in after running `sam deploy --guided` ─────────────────────
+# s3_bucket         = "readymix-sam-deployments-<your-account-id>"
+# region            = "us-east-1"
+# parameter_overrides = "Environment=dev"
+# ─────────────────────────────────────────────────────────────────────────
+resolve_s3 = true
+s3_prefix = "readymix-dashboard"
+region = "us-east-1"
+parameter_overrides = "Environment=\"dev\""
+image_repositories = []

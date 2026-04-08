@@ -1,0 +1,10 @@
+{
+  "name": "readymix-shared-layer",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared utilities for ReadyMix Lambda functions",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  }
+}
