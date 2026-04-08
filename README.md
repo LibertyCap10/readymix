@@ -38,18 +38,18 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                           FRONTEND                               │
+│                           FRONTEND                              │
 │         React 18 + MUI v6 + AG Grid v35 + AG Charts v13         │
 │         Vite dev server  ·  Storybook  ·  Jest + RTL            │
-│                                                                   │
-│   /dispatch          /fleet             /analytics               │
-│   DispatchPage       FleetPage          AnalyticsPage            │
-│   ├─ DispatchGrid    ├─ FleetStatusChart  (Phase 6)              │
-│   ├─ MobileOrderList ├─ CycleTimeChart                           │
-│   ├─ NewOrderDialog  ├─ UtilizationChart                         │
-│   └─ OrderDrawer     └─ TruckRoster                              │
-│                                                                   │
-│   Data hooks: useOrders · useFleet · useAnalytics                │
+│                                                                 │
+│   /dispatch          /fleet             /analytics              │
+│   DispatchPage       FleetPage          AnalyticsPage           │
+│   ├─ DispatchGrid    ├─ FleetStatusChart  (Phase 6)             │
+│   ├─ MobileOrderList ├─ CycleTimeChart                          │
+│   ├─ NewOrderDialog  ├─ UtilizationChart                        │
+│   └─ OrderDrawer     └─ TruckRoster                             │
+│                                                                 │
+│   Data hooks: useOrders · useFleet · useAnalytics               │
 │   (Phase 1–3: mock data  ·  Phase 6: real API calls)            │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ REST / JSON
@@ -65,15 +65,15 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
       ┌────────┴──┐     ┌────┴──────┐   ┌───┴──────────────┐
       ▼           ▼     ▼           ▼   ▼                  ▼
 ┌──────────┐  ┌────────────────────────────────────────────────┐
-│          │  │              Aurora PostgreSQL                  │
-│ DynamoDB │  │              (Serverless v2)                    │
-│          │  │                                                  │
-│ Active   │  │  customers, plants, drivers, trucks (master)    │
-│ Orders   │  │  mix_designs, ingredients, admixtures           │
-│          │  │  delivery_history, delivery_events              │
-│ Truck    │  │                                                  │
-│ Status   │  │  Analytics queries: cycle time trends,          │
-│          │  │  on-time rates, volume by customer              │
+│          │  │              Aurora PostgreSQL                 │
+│ DynamoDB │  │              (Serverless v2)                   │
+│          │  │                                                │
+│ Active   │  │  customers, plants, drivers, trucks (master)   │
+│ Orders   │  │  mix_designs, ingredients, admixtures          │
+│          │  │  delivery_history, delivery_events             │
+│ Truck    │  │                                                │
+│ Status   │  │  Analytics queries: cycle time trends,         │
+│          │  │  on-time rates, volume by customer             │
 │ Event    │  └────────────────────────────────────────────────┘
 │ Log      │
 └──────────┘
@@ -81,7 +81,7 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
       └──────────── CloudWatch (logs · metrics · alarms)
 ```
 
-### Data Architecture: Polyglot Persistence
+### Data Architecture
 
 Two databases, each matched to its access pattern:
 
@@ -105,73 +105,6 @@ Two databases, each matched to its access pattern:
 | **Orders** | Delivery tickets | Read/write active orders; append events | Validate FKs; archive to delivery_history; customer search |
 | **Fleet** | Trucks + drivers | Read/write real-time status | Read master truck + driver data; merge with live status |
 | **Analytics** | Reporting | Real-time dispatch state | Volume trends, cycle times, on-time rates (SQL + window functions) |
-
----
-
-## Build Phases
-
-### ✅ Phase 1 — Foundations
-*React + Vite + TypeScript scaffold, MUI theme, Storybook, Jest, mock data*
-
-- Custom MUI theme (`ThemeProvider`, slate/orange palette, shared `statusColors`)
-- Reusable components with full test + story coverage:
-  - `StatusChip` — colored badge for order and truck statuses
-  - `TruckCard` — fleet member summary with live-status indicator
-  - `PlantSelector` — Autocomplete dropdown for switching batch plants
-- Mock data fixtures: 20 orders, 8 trucks, 2 plants, 10 customers, 4 mix designs
-- `PlantContext` — selected plant persisted to `localStorage`, available app-wide
-
-### ✅ Phase 2 — Dispatch Board
-*AG Grid v35, custom cell renderers, drawer, responsive mobile view*
-
-- `DispatchGrid` — AG Grid with status-grouped rows using injected full-width header rows (Community edition alternative to Enterprise row grouping). Columns: Ticket #, Customer, Job Site, Mix Design, Volume, Slump, Req. Time, Truck/Driver, Status.
-- `OrderDetailDrawer` — MUI Drawer (420px) with customer info, order details, truck assignment, mix design, and `StatusTimeline` stepper
-- `NewOrderDialog` — controlled form with Autocomplete customer typeahead, job-site select (filtered by customer), mix design, volume/slump validation, DateTimePicker, hot-load switch
-- `MobileOrderList` — card-based view, rendered below `md` breakpoint via `useMediaQuery`
-- `orderValidation.ts` — pure validation functions for form and business rules
-- `useOrders` hook — data layer with mock data; Phase 6 swaps internals to API calls without changing the component interface
-
-### ✅ Phase 3 — Fleet View
-*AG Charts v13, live-ticker simulation, fleet roster*
-
-- `FleetStatusChart` — bar chart; per-bar `itemStyler` colors bars by truck status
-- `CycleTimeChart` — line chart with 90-min benchmark `crossLines` reference line
-- `UtilizationChart` — donut chart; `innerLabels` shows utilization % in center hole
-- `TruckRoster` — AG Grid with live-updated status column, driver cert display, maintenance chip
-- `useFleetTicker` — `setInterval`-based status simulator; one truck advances per tick; resets on plant switch
-- `useFleet` / `useAnalytics` — data hooks; Phase 6 swaps to polling GET endpoints
-
-### ✅ Phase 4 — AWS Backend: DynamoDB
-*SAM template, Lambda handlers, DynamoDB table design, seeding scripts*
-
-- `backend/template.yaml` — SAM template: 3 DynamoDB tables (Orders, Trucks, Plants) with GSIs, 3 Lambda functions, shared layer, API Gateway, CloudWatch alarms and dashboard
-- `layers/shared/nodejs/dynamo-client.mjs` — DynamoDB Document Client wrapper, `canTransition()` status validation, table name constants
-- `layers/shared/nodejs/response.mjs` — CORS-aware HTTP response helpers (`ok`, `created`, `badRequest`, `notFound`, `conflict`, `serverError`), request parsing
-- `services/orders/` — GET/POST/PATCH orders; status transition enforcement; event log append; optimistic concurrency via conditional expressions
-- `services/fleet/` — GET fleet by plant + status filter; GET single truck; PATCH real-time truck status
-- `services/analytics/` — GET volume, utilization, cycle-times (Phase 4: DynamoDB aggregation; Phase 5: replaced by Aurora SQL)
-- `scripts/seed-dynamodb.mjs` — seeds all three tables with data matching the frontend mocks (2 plants, 8 trucks, 14 orders)
-- Unit tests for all handlers and shared utilities (`aws-sdk-client-mock`); `canTransition` test suite mirrors frontend test coverage
-
-### 🔲 Phase 5 — AWS Backend: Aurora PostgreSQL
-*Aurora Serverless v2, RDS Data API, relational schema, analytics queries*
-
-- Aurora Serverless v2 cluster provisioned via SAM template
-- Full schema: customers, plants, trucks, drivers, mix_designs, delivery_history, delivery_events
-- RDS Data API access from Lambda (no VPC, no connection pool)
-- Analytics service: cycle time trends, utilization, on-time delivery rates (SQL + window functions)
-- CloudWatch: structured JSON logging, custom metrics, Lambda error alarms
-
-### 🔲 Phase 6 — Integration + Polish
-*Wire frontend to real API, loading states, error boundaries, accessibility*
-
-- Replace mock data hooks with `fetch` calls to API Gateway; `useOrders`, `useFleet`, `useAnalytics` internals swap — no component changes required
-- MUI `Skeleton` loading states
-- React error boundaries
-- Debounced customer typeahead against Aurora
-- Responsive audit at 320 / 768 / 1024 / 1440px
-- Accessibility: AG Grid keyboard nav, chart ARIA labels, drawer focus management
-- Test coverage target: 70%+ business logic, 50%+ overall
 
 ---
 
@@ -214,7 +147,7 @@ readymix/
 │   ├── .storybook/                       # Storybook config + global ThemeProvider decorator
 │   ├── jest.config.ts
 │   └── package.json
-├── backend/                              # Phase 4 ✅ — Phase 5 DynamoDB+Aurora coming
+├── backend/                              
 │   ├── template.yaml                     # SAM template (Lambda + DynamoDB + API GW + CloudWatch)
 │   ├── samconfig.toml                    # SAM deployment config (fill in after --guided)
 │   ├── package.json                      # Jest config + devDependencies for backend tests
@@ -232,7 +165,7 @@ readymix/
 │   │   └── response.mjs
 │   └── scripts/
 │       └── seed-dynamodb.mjs             # Seed all 3 tables with data matching frontend mocks
-├── database/                             # Phase 5
+├── database/                             
 │   ├── schema.sql                        # Full Aurora PostgreSQL schema
 │   └── seed.sql                          # Reference data seed
 └── docs/
@@ -259,8 +192,8 @@ readymix/
 
 ```bash
 node --version   # 20+
-aws --version    # AWS CLI (for Phases 4–5)
-sam --version    # SAM CLI (for Phases 4–5)
+aws --version    # AWS CLI
+sam --version    # SAM CLI
 ```
 
 ### Run the frontend
@@ -282,9 +215,177 @@ npm run storybook  # http://localhost:6006
 
 ```bash
 cd frontend
-npm test           # 93 tests, 13 suites
+npm test           
 ```
 
+### Common Commands
+
+```bash
+### AWS ###
+aws s3 mb s3://my-bucket             # make a new bucket
+aws s3 ls                            # list all buckets
+aws s3 ls s3://my-bucket/            # list objects in a bucket
+aws s3 rm s3://my-bucket/file.zip    # delete an object
+aws s3 rb s3://my-bucket --force     # remove a bucket and all its contents
+aws configure
+aws sts get-caller-identity
+
+# post-deploy verification of output from template.yaml
+aws cloudformation describe-stacks \
+  --stack-name readymix-dashboard-dev \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+  --output text 
+
+### SAM ###
+sam build                           # compile and prepare your Lambda functions and layers
+sam local start-api                 # spin up a local API Gateway for testing
+sam validate                        # check your template.yaml for errors
+sam package --s3-bucket my-bucket --output-template-file packaged.yaml # package artifacts and upload to S3 (older workflow, sam deploy --guided handles this now)
+sam deploy --guided                 # interactive first-time deploy (creates/uses a samconfig.toml for future runs)
+sam deploy                          # deploy using saved samconfig.toml settings
+sam delete --stack-name my-stack    # tear down the entire CloudFormation stack
+
+### FLAGS FOR BOTH ###
+--profile my-profile          # use a named AWS credentials profile
+--region us-east-1            # target a specific region
+--no-confirm-changeset        # skip the changeset approval prompt on deploy
+```
+
+### Running locally 
+
+```bash
+
+----------------------
+0. Install pre-reqs
+----------------------
+
+brew install awscli
+brew install aws-sam-cli
+brew install libpq
+
+# also add libpq to PATH: 
+echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+             
+
+----------------------
+1. Start databases
+----------------------
+
+# DynamoDB Local
+docker run -d -p 8000:8000 amazon/dynamodb-local
+
+# PostgreSQL (local Aurora stand-in)
+docker run -d --name readymix-pg \
+  -e POSTGRES_USER=readymix_admin \
+  -e POSTGRES_PASSWORD=localdev123 \
+  -e POSTGRES_DB=readymix \
+  -p 5432:5432 postgres:15
+
+----------------------
+2. Load data
+----------------------
+
+# Aurora schema + seed data
+psql postgresql://readymix_admin:localdev123@localhost:5432/readymix \
+  -f database/schema.sql
+
+# DynamoDB seed (after SAM local is running or tables exist)
+cd backend/scripts && node seed-dynamodb.mjs
+
+---------------------------
+3. Create backend/env.json
+---------------------------
+{
+  "OrdersFunction": {
+    "ORDERS_TABLE": "readymix-orders-dev",
+    "TRUCKS_TABLE": "readymix-trucks-dev",
+    "PLANTS_TABLE": "readymix-plants-dev",
+    "AWS_ENDPOINT_URL": "http://host.docker.internal:8000"
+  },
+  "FleetFunction": {
+    "ORDERS_TABLE": "readymix-orders-dev",
+    "TRUCKS_TABLE": "readymix-trucks-dev",
+    "PLANTS_TABLE": "readymix-plants-dev",
+    "AWS_ENDPOINT_URL": "http://host.docker.internal:8000"
+  },
+  "AnalyticsFunction": {
+    "USE_LOCAL_PG": "true",
+    "PG_CONNECTION_STRING": "postgresql://readymix_admin:localdev123@host.docker.internal:5432/readymix"
+  }
+}
+
+----------------------
+4. Start backend
+----------------------
+
+cd backend
+sam build
+sam local start-api --port 3001 --env-vars env.json --warm-containers EAGER
+
+----------------------
+5. Start frontend
+----------------------
+
+cd frontend
+npm install
+# Create .env.local pointing to local API:
+echo "VITE_API_URL=http://localhost:3001" > .env.local
+npm run dev    # http://localhost:3000
+
+-------------------------------
+6. When finished --- Tear down
+-------------------------------
+
+# Stop SAM local API (Ctrl+C in its terminal), then:
+
+# Stop and remove database containers
+docker stop readymix-pg && docker rm readymix-pg
+docker stop $(docker ps -q --filter ancestor=amazon/dynamodb-local) && \
+docker rm $(docker ps -aq --filter ancestor=amazon/dynamodb-local)
+
+# Optional: remove images to free disk space
+docker rmi postgres:15 amazon/dynamodb-local
+```
+
+### Backend Build and Deploy
+
+```bash
+
+sam build && sam deploy
+
+```
+
+
+### Frontend Build and Deploy
+
+```bash 
+
+cd frontend && npm run build
+
+BUCKET=$(aws cloudformation describe-stacks \
+  --stack-name readymix-dashboard \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+  --output text)
+
+aws s3 sync dist/ s3://$BUCKET --delete
+
+# CloudFront cache invalidation
+DIST_ID=$(aws cloudformation describe-stacks \
+  --stack-name readymix-dashboard \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" \
+  --output text)
+
+aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
+
+# Get CloudFront URL
+aws cloudformation describe-stacks \
+  --stack-name readymix-dashboard-dev \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendUrl'].OutputValue" \
+  --output text
+
+  ```
 ---
 
 ## Domain Primer
@@ -347,17 +448,3 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 | `GET` | `/mix-designs?plantId` | Aurora | Available mix designs for a plant |
 | `GET` | `/plants` | Aurora | All plants |
 
----
-
-## Review Docs
-
-Each `docs/review/` file explains a major technology used in this project — what it is, why we chose it over alternatives, how we used it, and interview talking points:
-
-| Doc | Covers |
-|---|---|
-| [`01-react-vite-typescript.md`](docs/review/01-react-vite-typescript.md) | React 18, Vite build tooling, TypeScript config, JSX transform |
-| [`02-material-ui-theming.md`](docs/review/02-material-ui-theming.md) | MUI ThemeProvider, `sx` prop, palette customization, `statusColors` pattern |
-| [`03-storybook-overview.md`](docs/review/03-storybook-overview.md) | CSF3 stories, decorators, args, why Storybook complements Jest |
-| [`04-ag-grid-deep-dive.md`](docs/review/04-ag-grid-deep-dive.md) | Community vs Enterprise, column defs, cell renderers, module registration (v33+), themeQuartz, full-width rows for status grouping |
-| [`05-react-patterns.md`](docs/review/05-react-patterns.md) | Custom hooks as data layer, controlled forms, `useCallback`/`useMemo`, responsive design, component composition |
-| [`06-ag-charts-overview.md`](docs/review/06-ag-charts-overview.md) | AG Charts vs Recharts/Victory, `AgChartOptions` object shape, bar `itemStyler`, line `crossLines`, donut `innerLabels`, module registration (v13+), testing strategy |

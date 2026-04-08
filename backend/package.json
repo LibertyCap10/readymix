@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-rds-data": "^3.1026.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@aws-sdk/util-dynamodb": "^3.0.0",
     "aws-sdk-client-mock": "^4.0.0",
@@ -19,7 +20,16 @@
   "jest": {
     "testEnvironment": "node",
     "transform": {},
-    "testMatch": ["**/*.test.mjs"],
+    "roots": [
+      "<rootDir>/services"
+    ],
+    "testMatch": [
+      "**/*.test.mjs"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.aws-sam",
+      "<rootDir>/layers/shared/nodejs/node_modules"
+    ],
     "moduleNameMapper": {
       "^/opt/nodejs/(.*)$": "<rootDir>/layers/shared/nodejs/$1"
     }

@@ -21,6 +21,9 @@ Globals:
         PLANTS_TABLE:  !Ref PlantsTable
         REGION:        !Ref AWS::Region
         ENVIRONMENT:   !Ref Environment
+        AURORA_CLUSTER_ARN: !GetAtt AuroraCluster.DBClusterArn
+        AURORA_SECRET_ARN:  !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+        AURORA_DATABASE:    readymix
   Api:
     Cors:
       AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
@@ -36,6 +39,14 @@ Parameters:
     Default: dev
     AllowedValues: [dev, staging, prod]
     Description: Deployment environment (used to namespace all resource names)
+  AuroraMinACU:
+    Type: Number
+    Default: 0.5
+    Description: Minimum Aurora Capacity Units (0.5 = near-zero idle cost)
+  AuroraMaxACU:
+    Type: Number
+    Default: 4
+    Description: Maximum Aurora Capacity Units
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Resources
@@ -138,6 +149,100 @@ Resources:
           KeyType: HASH
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # AURORA SERVERLESS V2 (PostgreSQL)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub readymix-aurora-${Environment}
+      Engine: aurora-postgresql
+      EngineVersion: "15.4"
+      EngineMode: provisioned           # Serverless v2 uses "provisioned" mode
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref AuroraMinACU
+        MaxCapacity: !Ref AuroraMaxACU
+      MasterUsername: readymix_admin
+      ManageMasterUserPassword: true    # Auto-generates and stores in Secrets Manager
+      DatabaseName: readymix
+      EnableHttpEndpoint: true          # Enables the RDS Data API
+      StorageEncrypted: true
+      DeletionProtection: false         # Set to true for production
+      BackupRetentionPeriod: 7
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      DBSubnetGroupName: !Ref AuroraSubnetGroup
+      Tags:
+        - Key: Project
+          Value: ReadyMix
+        - Key: Environment
+          Value: !Ref Environment
+
+  AuroraInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub readymix-aurora-instance-${Environment}
+      DBClusterIdentifier: !Ref AuroraCluster
+      DBInstanceClass: db.serverless    # This is what makes it Serverless v2
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # NETWORKING (minimal VPC for Aurora)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Aurora requires a VPC, but Lambdas stay OUTSIDE the VPC.
+  # They access Aurora via the RDS Data API (HTTP), not direct TCP.
+
+  AuroraVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub readymix-vpc-${Environment}
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuroraVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub readymix-private-a-${Environment}
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AuroraVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub readymix-private-b-${Environment}
+
+  AuroraSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for Aurora cluster
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Aurora access (Data API bypasses this, but required for provisioning)
+      VpcId: !Ref AuroraVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # SHARED LAMBDA LAYER
   # ═══════════════════════════════════════════════════════════════════════════
 
@@ -170,6 +275,19 @@ Resources:
             TableName: !Ref OrdersTable
         - DynamoDBReadPolicy:
             TableName: !Ref PlantsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !GetAtt AuroraCluster.DBClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
       Events:
         ListOrders:
           Type: Api
@@ -214,6 +332,19 @@ Resources:
             TableName: !Ref TrucksTable
         - DynamoDBReadPolicy:
             TableName: !Ref PlantsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !GetAtt AuroraCluster.DBClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
       Events:
         ListFleet:
           Type: Api
@@ -238,14 +369,14 @@ Resources:
       RetentionInDays: 14
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # ANALYTICS SERVICE  (Phase 5 adds Aurora queries; DynamoDB aggregations here)
+  # ANALYTICS SERVICE  (Phase 5: Aurora SQL queries against delivery_history)
   # ═══════════════════════════════════════════════════════════════════════════
 
   AnalyticsFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub readymix-analytics-${Environment}
-      Description: Operational analytics — aggregates from DynamoDB (Aurora added Phase 5)
+      Description: Operational analytics — Aurora SQL queries against delivery_history
       Handler: index.handler
       CodeUri: services/analytics/
       Policies:
@@ -254,6 +385,19 @@ Resources:
         - DynamoDBReadPolicy:
             TableName: !Ref TrucksTable
         - CloudWatchPutMetricPolicy: {}
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - rds-data:BeginTransaction
+                - rds-data:CommitTransaction
+                - rds-data:RollbackTransaction
+              Resource: !GetAtt AuroraCluster.DBClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
       Events:
         GetVolume:
           Type: Api
@@ -381,6 +525,19 @@ Resources:
                 ],
                 "period": 300, "stat": "Sum"
               }
+            },
+            {
+              "type": "metric",
+              "width": 12, "height": 6,
+              "properties": {
+                "region": "${AWS::Region}",
+                "title": "Aurora Serverless Capacity",
+                "metrics": [
+                  ["AWS/RDS", "ServerlessDatabaseCapacity", "DBClusterIdentifier", "readymix-aurora-${Environment}"],
+                  ["AWS/RDS", "ACUUtilization", "DBClusterIdentifier", "readymix-aurora-${Environment}"]
+                ],
+                "period": 300, "stat": "Average", "view": "timeSeries"
+              }
             }
           ]
         }
@@ -489,3 +646,13 @@ Outputs:
     Value: !Ref FrontendBucket
   FrontendDistributionId:
       Value: !Ref FrontendDistribution
+
+  AuroraClusterArn:
+    Description: Aurora cluster ARN — used by run-schema.mjs and Lambda env vars
+    Value: !GetAtt AuroraCluster.DBClusterArn
+  AuroraSecretArn:
+    Description: Secrets Manager ARN for Aurora master password
+    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+  AuroraEndpoint:
+    Description: Aurora cluster endpoint (for direct connections if needed)
+    Value: !GetAtt AuroraCluster.Endpoint.Address
