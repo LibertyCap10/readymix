@@ -37,7 +37,7 @@ export function validateOrder(draft: Partial<NewOrderDraft>): ValidationErrors {
   }
 
   // Volume: 0.5 – 12 cubic yards (typical truck capacity range)
-  if (draft.volume === undefined || draft.volume === null || draft.volume === ('' as unknown as number)) {
+  if (draft.volume === undefined || draft.volume === null || String(draft.volume).trim() === '') {
     errors.volume = 'Volume is required.';
   } else if (draft.volume < 0.5) {
     errors.volume = 'Minimum load is 0.5 yd³.';
@@ -46,7 +46,7 @@ export function validateOrder(draft: Partial<NewOrderDraft>): ValidationErrors {
   }
 
   // Slump: 2 – 10 inches (typical field range)
-  if (draft.slump === undefined || draft.slump === null || draft.slump === ('' as unknown as number)) {
+  if (draft.slump === undefined || draft.slump === null || String(draft.slump).trim() === '') {
     errors.slump = 'Slump is required.';
   } else if (draft.slump < 2) {
     errors.slump = 'Slump must be at least 2".';

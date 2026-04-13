@@ -9,7 +9,7 @@
 
 import { useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { themeQuartz, type ColDef } from 'ag-grid-community';
+import type { ColDef } from 'ag-grid-community';
 import { Box, Typography, Chip } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import type { Truck } from '@/types/domain';
@@ -18,18 +18,7 @@ import { StatusChip } from '@/components/StatusChip';
 import type { TruckStatus } from '@/theme/statusColors';
 import dayjs from 'dayjs';
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-
-const rosterTheme = themeQuartz.withParams({
-  accentColor: '#FF6D00',
-  fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  fontSize: 13,
-  headerBackgroundColor: '#37474F',
-  headerTextColor: '#ffffff',
-  headerFontWeight: 600,
-  selectedRowBackgroundColor: '#E3F2FD',
-  oddRowBackgroundColor: '#FAFAFA',
-});
+import { agGridTheme } from '@/theme/agGridTheme';
 
 // ─── Cell Renderers ───────────────────────────────────────────────────────────
 
@@ -161,13 +150,13 @@ export function TruckRoster({ trucks }: TruckRosterProps) {
   return (
     <Box sx={{ height: '100%', width: '100%' }}>
       <AgGridReact<Truck>
-        theme={rosterTheme}
+        theme={agGridTheme}
         rowData={trucks}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
         rowHeight={52}
         headerHeight={44}
-        rowSelection="single"
+        rowSelection={{ mode: "singleRow" }}
         animateRows
         getRowId={(p) => p.data.truckId}
         suppressCellFocus={false}

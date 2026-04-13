@@ -28,37 +28,7 @@ import { VolumeChart } from './VolumeChart';
 import { KpiCards } from './KpiCards';
 import { CustomerTable } from './CustomerTable';
 import { DriverTable } from './DriverTable';
-
-// Chart card wrapper (matches FleetPage pattern)
-function ChartCard({ title, subtitle, children, height = 280 }: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  height?: number;
-}) {
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 2,
-        p: 2,
-        height: height + 48,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Box sx={{ mb: 1 }}>
-        <Typography variant="subtitle2" fontWeight={700}>{title}</Typography>
-        {subtitle && (
-          <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
-        )}
-      </Box>
-      <Box sx={{ flex: 1, minHeight: 0 }}>{children}</Box>
-    </Paper>
-  );
-}
+import { ChartCard } from '@/components/ChartCard';
 
 // Section header
 function SectionHeader({ children }: { children: React.ReactNode }) {

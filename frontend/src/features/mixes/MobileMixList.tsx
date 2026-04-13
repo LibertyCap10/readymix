@@ -13,18 +13,8 @@ import {
   Typography,
 } from '@mui/material';
 import CircleIcon from '@mui/icons-material/Circle';
-import type { MixDesign, PourType } from '@/types/domain';
-
-const POUR_TYPE_LABELS: Record<PourType, string> = {
-  foundation: 'Foundation',
-  slab: 'Slab',
-  wall: 'Wall',
-  driveway: 'Driveway',
-  sidewalk: 'Sidewalk',
-  column: 'Column',
-  footing: 'Footing',
-  grade_beam: 'Grade Beam',
-};
+import { POUR_TYPE_LABELS } from '@/types/domain';
+import type { MixDesign } from '@/types/domain';
 
 interface MobileMixListProps {
   mixDesigns: MixDesign[];

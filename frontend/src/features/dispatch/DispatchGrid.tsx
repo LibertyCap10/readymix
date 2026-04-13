@@ -18,7 +18,6 @@
 import { useRef, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import {
-  themeQuartz,
   type ColDef,
   type GetRowIdParams,
 } from 'ag-grid-community';
@@ -28,18 +27,7 @@ import { StatusChip } from '@/components/StatusChip';
 import type { OrderStatus } from '@/theme/statusColors';
 import { columnDefs, buildPinnedBottomRow, STATUS_DISPLAY_ORDER } from './columnDefs';
 
-// ─── Theming ──────────────────────────────────────────────────────────────────
-
-const agGridTheme = themeQuartz.withParams({
-  accentColor: '#FF6D00',                // Safety orange — selection highlight
-  fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  fontSize: 13,
-  headerBackgroundColor: '#37474F',      // Slate gray header (matches MUI primary)
-  headerTextColor: '#ffffff',
-  headerFontWeight: 600,
-  selectedRowBackgroundColor: '#E3F2FD', // MUI blue-50 — clear but not distracting
-  oddRowBackgroundColor: '#FAFAFA',      // Subtle alternating rows
-});
+import { agGridTheme } from '@/theme/agGridTheme';
 
 // ─── Group header row type ────────────────────────────────────────────────────
 
@@ -185,7 +173,7 @@ export function DispatchGrid({ orders, onOrderClick }: DispatchGridProps) {
         isFullWidthRow={isFullWidthRow}
         fullWidthCellRenderer={StatusGroupHeader}
         // Row interaction
-        rowSelection="single"
+        rowSelection={{ mode: "singleRow" }}
         onRowClicked={onRowClicked}
         getRowClass={getRowClass}
         getRowId={getRowId}

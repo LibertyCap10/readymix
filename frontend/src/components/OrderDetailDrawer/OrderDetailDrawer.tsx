@@ -28,6 +28,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import dayjs from 'dayjs';
 import type { Order } from '@/types/domain';
+import { POUR_TYPE_LABELS } from '@/types/domain';
 import { StatusChip } from '@/components/StatusChip';
 import { StatusTimeline } from './StatusTimeline';
 import { api } from '@/api/client';
@@ -44,18 +45,6 @@ interface OrderDetailDrawerProps {
   open: boolean;
   onClose: () => void;
 }
-
-// Human-readable pour type labels
-const POUR_TYPE_LABELS: Record<Order['pourType'], string> = {
-  foundation: 'Foundation',
-  slab: 'Slab',
-  wall: 'Wall',
-  driveway: 'Driveway',
-  sidewalk: 'Sidewalk',
-  column: 'Column',
-  footing: 'Footing',
-  grade_beam: 'Grade Beam',
-};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -110,7 +99,7 @@ export function OrderDetailDrawer({ order, open, onClose }: OrderDetailDrawerPro
       ModalProps={{ keepMounted: true }}
       PaperProps={{
         sx: {
-          width: { xs: '100vw', sm: 420 },
+          width: { xs: '100%', sm: 420 },
           borderRadius: '12px 0 0 12px',
           display: 'flex',
           flexDirection: 'column',

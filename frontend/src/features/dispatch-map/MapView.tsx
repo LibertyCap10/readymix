@@ -1,10 +1,15 @@
 /**
  * MapView — the Mapbox GL map with plant, truck, and job site markers,
  * route lines, and interactive popups.
+ *
+ * Route visibility is controlled by showAllRoutes + selectedTicket:
+ *  - showAllRoutes=false, no selection → no routes
+ *  - showAllRoutes=false, order selected → only that route (prominent)
+ *  - showAllRoutes=true → all routes, selected one highlighted
  */
 
-import { useState, useCallback, useMemo } from 'react';
-import Map, { Marker, Popup, Source, Layer, type ViewStateChangeEvent } from 'react-map-gl/mapbox';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import Map, { Marker, Popup, Source, Layer, type ViewStateChangeEvent, type MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Box, Typography, Button, IconButton } from '@mui/material';
 import FactoryIcon from '@mui/icons-material/Factory';
@@ -26,6 +31,8 @@ interface MapViewProps {
   trucks: Truck[];
   routes: Record<string, RouteData>;
   selectedTicket: string | null;
+  showAllRoutes: boolean;
+  showTrucks: boolean;
   onOrderSelect: (order: Order) => void;
   onTruckSelect: (truck: Truck) => void;
   onAssignTruck: (order: Order) => void;
@@ -39,25 +46,29 @@ interface MapViewProps {
 function buildRouteGeoJSON(
   routes: Record<string, RouteData>,
   orders: Order[],
+  visibleTickets: string[],
+  selectedTicket: string | null,
 ): FeatureCollection<LineString> {
+  const ticketSet = new Set(visibleTickets);
+
   const features = Object.entries(routes)
+    .filter(([ticketNumber]) => ticketSet.has(ticketNumber))
     .map(([ticketNumber, route]) => {
       const order = orders.find(o => o.ticketNumber === ticketNumber);
-      if (!order) return null;
+      const isSelected = ticketNumber === selectedTicket;
       return {
         type: 'Feature' as const,
         properties: {
           ticketNumber,
-          status: order.status,
-          color: order.status === 'in_transit' ? '#283593' : '#1565C0',
+          status: order?.status ?? 'dispatched',
+          isSelected,
         },
         geometry: {
           type: 'LineString' as const,
           coordinates: route.coordinates,
         },
       };
-    })
-    .filter(Boolean) as FeatureCollection<LineString>['features'];
+    });
 
   return { type: 'FeatureCollection', features };
 }
@@ -80,6 +91,8 @@ export function MapView({
   trucks,
   routes,
   selectedTicket,
+  showAllRoutes,
+  showTrucks,
   onOrderSelect,
   onTruckSelect,
   onAssignTruck,
@@ -87,6 +100,8 @@ export function MapView({
   sidePanelHidden,
   onToggleSidePanel,
 }: MapViewProps) {
+  const mapRef = useRef<MapRef>(null);
+
   const [viewState, setViewState] = useState({
     longitude: plant.longitude,
     latitude: plant.latitude,
@@ -95,13 +110,31 @@ export function MapView({
   const [popupOrder, setPopupOrder] = useState<Order | null>(null);
   const [popupTruck, setPopupTruck] = useState<Truck | null>(null);
 
+  // Resize map when side panel is toggled so it fills the available space
+  useEffect(() => {
+    const t = setTimeout(() => mapRef.current?.resize(), 50);
+    return () => clearTimeout(t);
+  }, [sidePanelHidden]);
+
   const handleMove = useCallback((e: ViewStateChangeEvent) => {
     setViewState(e.viewState);
   }, []);
 
+  const handleMapClick = useCallback(() => {
+    setPopupOrder(null);
+    setPopupTruck(null);
+  }, []);
+
+  // Determine which route tickets to render
+  const visibleRouteTickets = useMemo(() => {
+    if (showAllRoutes) return Object.keys(routes);
+    if (selectedTicket && routes[selectedTicket]) return [selectedTicket];
+    return [];
+  }, [showAllRoutes, selectedTicket, routes]);
+
   const routeGeoJSON = useMemo(
-    () => buildRouteGeoJSON(routes, orders),
-    [routes, orders],
+    () => buildRouteGeoJSON(routes, orders, visibleRouteTickets, selectedTicket),
+    [routes, orders, visibleRouteTickets, selectedTicket],
   );
 
   const handleOrderClick = useCallback((order: Order) => {
@@ -129,21 +162,44 @@ export function MapView({
   return (
     <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
       <Map
+        ref={mapRef}
         {...viewState}
         onMove={handleMove}
+        onClick={handleMapClick}
         mapboxAccessToken={MAPBOX_TOKEN}
         mapStyle="mapbox://styles/mapbox/light-v11"
         style={{ width: '100%', height: '100%' }}
       >
         {/* ── Route lines ──────────────────────────────────────────── */}
         <Source id="routes" type="geojson" data={routeGeoJSON}>
+          {/* Shadow layer for selected route — wider, translucent */}
+          <Layer
+            id="route-lines-shadow"
+            type="line"
+            filter={['==', ['get', 'isSelected'], true]}
+            paint={{
+              'line-color': '#1565C0',
+              'line-width': 10,
+              'line-opacity': 0.2,
+            }}
+          />
+          {/* Main route lines — data-driven styling */}
           <Layer
             id="route-lines"
             type="line"
             paint={{
-              'line-color': ['get', 'color'],
-              'line-width': 4,
-              'line-opacity': 0.7,
+              'line-color': ['case',
+                ['get', 'isSelected'], '#1565C0',
+                '#90A4AE',
+              ],
+              'line-width': ['case',
+                ['get', 'isSelected'], 5,
+                3,
+              ],
+              'line-opacity': ['case',
+                ['get', 'isSelected'], 0.9,
+                0.45,
+              ],
             }}
           />
         </Source>
@@ -168,7 +224,7 @@ export function MapView({
         </Marker>
 
         {/* ── Truck markers ─────────────────────────────────────────── */}
-        {trucks.map(truck => {
+        {showTrucks && trucks.map(truck => {
           const color = truckStatusColors[truck.currentStatus as TruckStatus]?.text ?? '#666';
           return (
             <Marker

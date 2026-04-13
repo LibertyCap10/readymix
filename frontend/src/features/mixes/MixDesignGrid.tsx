@@ -7,37 +7,14 @@
 
 import { useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { themeQuartz, type ColDef } from 'ag-grid-community';
+import type { ColDef } from 'ag-grid-community';
 import { Box, Chip, Typography } from '@mui/material';
 import CircleIcon from '@mui/icons-material/Circle';
 import type { CustomCellRendererProps } from 'ag-grid-react';
+import { POUR_TYPE_LABELS } from '@/types/domain';
 import type { MixDesign, PourType } from '@/types/domain';
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-
-const gridTheme = themeQuartz.withParams({
-  accentColor: '#FF6D00',
-  fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  fontSize: 13,
-  headerBackgroundColor: '#37474F',
-  headerTextColor: '#ffffff',
-  headerFontWeight: 600,
-  selectedRowBackgroundColor: '#E3F2FD',
-  oddRowBackgroundColor: '#FAFAFA',
-});
-
-// ─── Label helpers ──────────────────────────────────────────────────────────
-
-const POUR_TYPE_LABELS: Record<PourType, string> = {
-  foundation: 'Foundation',
-  slab: 'Slab',
-  wall: 'Wall',
-  driveway: 'Driveway',
-  sidewalk: 'Sidewalk',
-  column: 'Column',
-  footing: 'Footing',
-  grade_beam: 'Grade Beam',
-};
+import { agGridTheme } from '@/theme/agGridTheme';
 
 // ─── Cell Renderers ──────────────────────────────────────────────────────────
 
@@ -148,13 +125,13 @@ export function MixDesignGrid({ mixDesigns, onRowClick }: MixDesignGridProps) {
   return (
     <Box sx={{ height: '100%', width: '100%' }}>
       <AgGridReact<MixDesign>
-        theme={gridTheme}
+        theme={agGridTheme}
         rowData={mixDesigns}
         columnDefs={columnDefs}
         defaultColDef={defaultColDef}
         rowHeight={52}
         headerHeight={44}
-        rowSelection="single"
+        rowSelection={{ mode: "singleRow" }}
         animateRows
         getRowId={p => p.data.mixDesignId}
         onRowClicked={e => e.data && onRowClick(e.data)}

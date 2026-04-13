@@ -1,15 +1,17 @@
 /**
  * DispatchMapPage — Mapbox-powered dispatch view.
  *
- * Desktop: split layout with map (flex) + side panel (360px)
- * Mobile: full-screen map with bottom sheet overlay
+ * Desktop: toolbar + split layout with map (flex) + side panel (360px)
+ * Mobile: toolbar + full-screen map with bottom sheet overlay
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Alert, Box, CircularProgress, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useDispatchMap } from './useDispatchMap';
 import { useMapRoutes } from './useMapRoutes';
+import { useDispatchMapFilters } from './useDispatchMapFilters';
+import { MapToolbar } from './MapToolbar';
 import { MapView } from './MapView';
 import { SidePanel } from './SidePanel';
 import { BottomSheet } from './BottomSheet';
@@ -25,15 +27,29 @@ export function DispatchMapPage() {
     plant,
     orders,
     allOrders,
-    activeOrders,
     trucks,
     availableTrucks,
     loading,
     error,
+    selectedDate,
+    setSelectedDate,
     updateOrderStatus,
     assignTruck,
   } = useDispatchMap();
 
+  // Filters — applied to allOrders so status filtering works across all statuses
+  const filters = useDispatchMapFilters(allOrders);
+
+  // Mappable subset of filtered orders (have coordinates)
+  const mappableFilteredOrders = useMemo(
+    () => filters.filteredOrders.filter(
+      o => o.jobSiteLatitude != null && o.jobSiteLongitude != null,
+    ),
+    [filters.filteredOrders],
+  );
+
+  // Routes are fetched for ALL active orders (not just filtered) so they're
+  // ready instantly when the user selects an order or toggles "show all routes"
   const routes = useMapRoutes(orders, plant);
 
   // UI state
@@ -56,7 +72,6 @@ export function DispatchMapPage() {
   const handleDoAssign = useCallback(
     async (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => {
       await assignTruck(ticketNumber, truckId, truckNumber, driverName);
-      // Also advance to dispatched if still pending
       await updateOrderStatus(ticketNumber, 'dispatched');
     },
     [assignTruck, updateOrderStatus],
@@ -85,57 +100,91 @@ export function DispatchMapPage() {
     );
   }
 
+  const toolbar = (
+    <MapToolbar
+      selectedDate={selectedDate}
+      onDateChange={setSelectedDate}
+      statusFilters={filters.statusFilters}
+      onToggleStatus={filters.toggleStatus}
+      statusCounts={filters.statusCounts}
+      searchQuery={filters.searchQuery}
+      onSearchChange={filters.setSearchQuery}
+      hotLoadOnly={filters.hotLoadOnly}
+      onHotLoadToggle={() => filters.setHotLoadOnly(v => !v)}
+      showTrucks={filters.showTrucks}
+      onTrucksToggle={() => filters.setShowTrucks(v => !v)}
+      showAllRoutes={filters.showAllRoutes}
+      onRoutesToggle={() => filters.setShowAllRoutes(v => !v)}
+      isFiltered={filters.isFiltered}
+      onClearFilters={filters.clearFilters}
+      filteredCount={filters.filteredOrders.length}
+      totalCount={filters.totalCount}
+    />
+  );
+
   if (isMobile) {
     return (
-      <Box sx={{ height: '100%', position: 'relative' }}>
-        <MapView
-          plant={plant}
-          orders={orders}
-          trucks={trucks}
-          routes={routes}
-          selectedTicket={selectedTicket}
-          onOrderSelect={handleOrderSelect}
-          onTruckSelect={handleTruckSelect}
-          onAssignTruck={handleAssignTruck}
-          onUpdateStatus={handleUpdateStatus}
-        />
-        <BottomSheet orders={activeOrders} onOrderSelect={handleOrderSelect} />
-        <AssignTruckDialog
-          open={!!assignOrder}
-          onClose={() => setAssignOrder(null)}
-          order={assignOrder}
-          availableTrucks={availableTrucks}
-          onAssign={handleDoAssign}
-        />
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {toolbar}
+        <Box sx={{ flex: 1, position: 'relative', minHeight: 0 }}>
+          <MapView
+            plant={plant}
+            orders={mappableFilteredOrders}
+            trucks={trucks}
+            routes={routes}
+            selectedTicket={selectedTicket}
+            showAllRoutes={filters.showAllRoutes}
+            showTrucks={filters.showTrucks}
+            onOrderSelect={handleOrderSelect}
+            onTruckSelect={handleTruckSelect}
+            onAssignTruck={handleAssignTruck}
+            onUpdateStatus={handleUpdateStatus}
+          />
+          <BottomSheet orders={filters.filteredOrders} onOrderSelect={handleOrderSelect} />
+          <AssignTruckDialog
+            open={!!assignOrder}
+            onClose={() => setAssignOrder(null)}
+            order={assignOrder}
+            availableTrucks={availableTrucks}
+            onAssign={handleDoAssign}
+          />
+        </Box>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <MapView
-          plant={plant}
-          orders={orders}
-          trucks={trucks}
-          routes={routes}
-          selectedTicket={selectedTicket}
-          onOrderSelect={handleOrderSelect}
-          onTruckSelect={handleTruckSelect}
-          onAssignTruck={handleAssignTruck}
-          onUpdateStatus={handleUpdateStatus}
-          sidePanelHidden={!sidePanelOpen}
-          onToggleSidePanel={() => setSidePanelOpen(true)}
-        />
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {toolbar}
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <MapView
+            plant={plant}
+            orders={mappableFilteredOrders}
+            trucks={trucks}
+            routes={routes}
+            selectedTicket={selectedTicket}
+            showAllRoutes={filters.showAllRoutes}
+            showTrucks={filters.showTrucks}
+            onOrderSelect={handleOrderSelect}
+            onTruckSelect={handleTruckSelect}
+            onAssignTruck={handleAssignTruck}
+            onUpdateStatus={handleUpdateStatus}
+            sidePanelHidden={!sidePanelOpen}
+            onToggleSidePanel={() => setSidePanelOpen(true)}
+          />
+        </Box>
+        {sidePanelOpen && (
+          <SidePanel
+            orders={filters.filteredOrders}
+            totalCount={filters.totalCount}
+            isFiltered={filters.isFiltered}
+            onOrderSelect={handleOrderSelect}
+            onClose={() => setSidePanelOpen(false)}
+            selectedTicket={selectedTicket ?? undefined}
+          />
+        )}
       </Box>
-      {sidePanelOpen && (
-        <SidePanel
-          orders={allOrders}
-          onOrderSelect={handleOrderSelect}
-          onClose={() => setSidePanelOpen(false)}
-          selectedTicket={selectedTicket ?? undefined}
-        />
-      )}
       <AssignTruckDialog
         open={!!assignOrder}
         onClose={() => setAssignOrder(null)}

@@ -24,7 +24,7 @@ export default function PlantSelector({ plants, selectedPlant, onPlantChange }: 
       }}
       disableClearable
       size="small"
-      sx={{ width: { xs: 160, sm: 220, md: 280 } }}
+      sx={{ width: { xs: 180, sm: 220, md: 280 } }}
       renderInput={(params) => (
         <TextField
           {...params}

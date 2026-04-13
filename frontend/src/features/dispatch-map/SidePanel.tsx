@@ -1,6 +1,8 @@
 /**
- * SidePanel — collapsible right panel showing today's active orders.
+ * SidePanel — collapsible right panel showing today's orders.
  * Desktop only — on mobile, BottomSheet is used instead.
+ *
+ * Receives pre-filtered orders from the toolbar's filter state.
  */
 
 import {
@@ -26,12 +28,14 @@ const STATUS_ORDER: OrderStatus[] = [
 
 interface SidePanelProps {
   orders: Order[];
+  totalCount: number;
+  isFiltered: boolean;
   onOrderSelect: (order: Order) => void;
   onClose: () => void;
   selectedTicket?: string;
 }
 
-export function SidePanel({ orders, onOrderSelect, onClose, selectedTicket }: SidePanelProps) {
+export function SidePanel({ orders, totalCount, isFiltered, onOrderSelect, onClose, selectedTicket }: SidePanelProps) {
   // Group orders by status
   const grouped = STATUS_ORDER
     .map(status => ({
@@ -69,7 +73,9 @@ export function SidePanel({ orders, onOrderSelect, onClose, selectedTicket }: Si
         <Box>
           <Typography variant="subtitle2" fontWeight={700}>Today's Orders</Typography>
           <Typography variant="caption" color="text.secondary">
-            {orders.length} order{orders.length !== 1 ? 's' : ''}
+            {isFiltered
+              ? `${orders.length} of ${totalCount} orders`
+              : `${orders.length} order${orders.length !== 1 ? 's' : ''}`}
           </Typography>
         </Box>
         <IconButton size="small" onClick={onClose}>
@@ -81,7 +87,7 @@ export function SidePanel({ orders, onOrderSelect, onClose, selectedTicket }: Si
       <Box sx={{ flex: 1, overflow: 'auto', p: 1.5 }}>
         {orders.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No orders for today.
+            {isFiltered ? 'No orders match filters.' : 'No orders for today.'}
           </Typography>
         ) : (
           <Stack spacing={1.5}>

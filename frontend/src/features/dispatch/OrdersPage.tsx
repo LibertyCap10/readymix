@@ -121,7 +121,7 @@ export function OrdersPage() {
       <Paper
         elevation={0}
         sx={{
-          px: { xs: 1, sm: 2 },
+          px: { xs: 1.5, md: 2.5 },
           py: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',

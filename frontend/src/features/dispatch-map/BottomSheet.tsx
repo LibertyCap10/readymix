@@ -25,8 +25,6 @@ interface BottomSheetProps {
 export function BottomSheet({ orders, onOrderSelect }: BottomSheetProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const activeOrders = orders.filter(o => !['complete', 'cancelled'].includes(o.status));
-
   return (
     <>
       {/* Collapsed handle — always visible */}
@@ -51,7 +49,7 @@ export function BottomSheet({ orders, onOrderSelect }: BottomSheetProps) {
         >
           <Box sx={{ width: 40, height: 4, bgcolor: 'grey.400', borderRadius: 2, mx: 'auto', mb: 1 }} />
           <Typography variant="subtitle2" fontWeight={700}>
-            {activeOrders.length} Active Order{activeOrders.length !== 1 ? 's' : ''}
+            {orders.length} Order{orders.length !== 1 ? 's' : ''}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             Tap to view

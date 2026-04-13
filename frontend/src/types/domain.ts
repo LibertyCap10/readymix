@@ -152,6 +152,17 @@ export type PourType =
   | 'footing'
   | 'grade_beam';
 
+export const POUR_TYPE_LABELS: Record<PourType, string> = {
+  foundation: 'Foundation',
+  slab: 'Slab',
+  wall: 'Wall',
+  driveway: 'Driveway',
+  sidewalk: 'Sidewalk',
+  column: 'Column',
+  footing: 'Footing',
+  grade_beam: 'Grade Beam',
+};
+
 export interface DeliveryEvent {
   timestamp: string;       // ISO datetime
   eventType: OrderStatus;
