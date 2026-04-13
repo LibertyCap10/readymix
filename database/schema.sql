@@ -10,6 +10,13 @@
 -- ============================================================
 
 -- ────────────────────────────────────────────────────────────
+-- RESET — drop everything so this script is re-runnable
+-- ────────────────────────────────────────────────────────────
+
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+
+-- ────────────────────────────────────────────────────────────
 -- EXTENSIONS
 -- ────────────────────────────────────────────────────────────
 
@@ -527,10 +534,10 @@ CREATE TRIGGER trg_drivers_updated    BEFORE UPDATE ON drivers      FOR EACH ROW
 
 -- Plants
 INSERT INTO plants (id, name, code, address, city, state, zip, lat, lng, phone, truck_capacity, mixer_count) VALUES
-    ('a1000000-0000-0000-0000-000000000001', 'Conway Batch Plant', 'PLANT-001', '1200 Industrial Loop', 'Conway', 'AR', '72032', 35.0887, -92.4421, '501-555-0100', 12, 3),
-    ('a1000000-0000-0000-0000-000000000002', 'North Little Rock Plant', 'PLANT-002', '800 Concrete Way', 'North Little Rock', 'AR', '72114', 34.7834, -92.2671, '501-555-0200', 16, 4);
+    ('a1000000-0000-0000-0000-000000000001', 'Riverside Batch Plant', 'PLANT-001', '1200 Industrial Blvd', 'Austin', 'TX', '78702', 30.2672, -97.7431, '512-555-0100', 12, 3),
+    ('a1000000-0000-0000-0000-000000000002', 'Northside Ready-Mix', 'PLANT-002', '4500 Quarry Rd', 'Round Rock', 'TX', '78681', 30.5083, -97.6789, '512-555-0200', 16, 4);
 
--- Plant operating hours (Conway: M-F 5am-5pm, Sat 6am-12pm)
+-- Plant operating hours (Riverside: M-F 5am-5pm, Sat 6am-12pm)
 INSERT INTO plant_operating_hours (plant_id, day, open_time, close_time) VALUES
     ('a1000000-0000-0000-0000-000000000001', 'monday', '05:00', '17:00'),
     ('a1000000-0000-0000-0000-000000000001', 'tuesday', '05:00', '17:00'),

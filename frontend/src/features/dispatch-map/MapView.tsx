@@ -17,6 +17,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PlaceIcon from '@mui/icons-material/Place';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { StatusChip } from '@/components/StatusChip';
+import { MapLegend } from './MapLegend';
 import { orderStatusColors, truckStatusColors } from '@/theme/statusColors';
 import type { Order, Truck, Plant } from '@/types/domain';
 import type { OrderStatus, TruckStatus } from '@/theme/statusColors';
@@ -398,6 +399,9 @@ export function MapView({
           </Popup>
         )}
       </Map>
+
+      {/* ── Map legend ──────────────────────────────────────────── */}
+      <MapLegend />
 
       {/* ── Side panel toggle (when hidden) ──────────────────────── */}
       {sidePanelHidden && onToggleSidePanel && (

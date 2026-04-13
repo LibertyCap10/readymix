@@ -47,7 +47,7 @@ export const api = {
   post<T>(path: string, body: unknown): Promise<T> {
     return request<T>('POST', path, body);
   },
-  patch<T>(path: string, body: unknown): Promise<T> {
-    return request<T>('PATCH', path, body);
+  patch<T>(path: string, body: unknown, params?: Record<string, string | number | undefined>): Promise<T> {
+    return request<T>('PATCH', path + buildQuery(params ?? {}), body);
   },
 };

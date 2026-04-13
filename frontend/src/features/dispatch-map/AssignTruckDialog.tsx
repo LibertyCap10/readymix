@@ -1,15 +1,20 @@
 /**
  * AssignTruckDialog — dialog for assigning or reassigning a truck to an order.
+ *
+ * Shows available trucks (selectable) and busy trucks (grayed out with status).
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  Chip,
+  Divider,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -18,6 +23,8 @@ import {
   Alert,
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import { truckStatusColors } from '@/theme/statusColors';
+import type { TruckStatus } from '@/theme/statusColors';
 import type { Order, Truck } from '@/types/domain';
 
 interface AssignTruckDialogProps {
@@ -25,6 +32,7 @@ interface AssignTruckDialogProps {
   onClose: () => void;
   order: Order | null;
   availableTrucks: Truck[];
+  allTrucks: Truck[];
   onAssign: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
 }
 
@@ -33,11 +41,17 @@ export function AssignTruckDialog({
   onClose,
   order,
   availableTrucks,
+  allTrucks,
   onAssign,
 }: AssignTruckDialogProps) {
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const busyTrucks = useMemo(
+    () => allTrucks.filter(t => t.currentStatus !== 'available'),
+    [allTrucks],
+  );
 
   const handleAssign = async () => {
     if (!order || !selectedTruck) return;
@@ -77,9 +91,14 @@ export function AssignTruckDialog({
           </Box>
         )}
 
+        {/* Available trucks — selectable */}
+        <Typography variant="overline" color="success.main" sx={{ fontWeight: 700 }}>
+          Available ({availableTrucks.length})
+        </Typography>
+
         {availableTrucks.length === 0 ? (
-          <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-            No trucks available for assignment.
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 1, pl: 1 }}>
+            No trucks available right now.
           </Typography>
         ) : (
           <List dense>
@@ -91,7 +110,7 @@ export function AssignTruckDialog({
                 sx={{ borderRadius: 1 }}
               >
                 <ListItemIcon>
-                  <LocalShippingIcon />
+                  <LocalShippingIcon color="success" />
                 </ListItemIcon>
                 <ListItemText
                   primary={`Truck ${truck.truckNumber}`}
@@ -100,6 +119,51 @@ export function AssignTruckDialog({
               </ListItemButton>
             ))}
           </List>
+        )}
+
+        {/* Busy trucks — display only */}
+        {busyTrucks.length > 0 && (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700 }}>
+              Busy ({busyTrucks.length})
+            </Typography>
+            <List dense>
+              {busyTrucks.map(truck => {
+                const statusColor = truckStatusColors[truck.currentStatus as TruckStatus];
+                return (
+                  <ListItem key={truck.truckId} sx={{ opacity: 0.55, borderRadius: 1 }}>
+                    <ListItemIcon>
+                      <LocalShippingIcon sx={{ color: statusColor?.text ?? 'text.disabled' }} />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <span>Truck {truck.truckNumber}</span>
+                          <Chip
+                            label={statusColor?.label ?? truck.currentStatus}
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: '0.65rem',
+                              bgcolor: statusColor?.background,
+                              color: statusColor?.text,
+                              fontWeight: 600,
+                            }}
+                          />
+                        </Box>
+                      }
+                      secondary={
+                        truck.currentJobSite
+                          ? `${truck.driver.name} -- ${truck.currentJobSite}`
+                          : truck.driver.name
+                      }
+                    />
+                  </ListItem>
+                );
+              })}
+            </List>
+          </>
         )}
       </DialogContent>
       <DialogActions>

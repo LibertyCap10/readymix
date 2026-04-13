@@ -120,12 +120,11 @@ export function useOrders(): UseOrdersReturn {
     }
 
     try {
-      const updated = await api.patch<Order>(`/orders/${ticketNumber}`, {
-        plantId: selectedPlant.plantId,
-        date: selectedDate,
-        status: newStatus,
-        note,
-      });
+      const updated = await api.patch<Order>(
+        `/orders/${ticketNumber}`,
+        { status: newStatus, note },
+        { plantId: selectedPlant.plantId, date: selectedDate },
+      );
 
       setOrders((prev) =>
         prev.map((o) => (o.ticketNumber === ticketNumber ? updated : o))
@@ -144,13 +143,11 @@ export function useOrders(): UseOrdersReturn {
     driverName: string,
   ) => {
     try {
-      const updated = await api.patch<Order>(`/orders/${ticketNumber}`, {
-        plantId: selectedPlant.plantId,
-        date: selectedDate,
-        assignedTruckId: truckId,
-        assignedTruckNumber: truckNumber,
-        driverName,
-      });
+      const updated = await api.patch<Order>(
+        `/orders/${ticketNumber}`,
+        { assignedTruckId: truckId, assignedTruckNumber: truckNumber, driverName },
+        { plantId: selectedPlant.plantId, date: selectedDate },
+      );
 
       setOrders((prev) =>
         prev.map((o) => (o.ticketNumber === ticketNumber ? updated : o))

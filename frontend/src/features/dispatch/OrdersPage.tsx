@@ -21,6 +21,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  IconButton,
   Stack,
   Typography,
   useMediaQuery,
@@ -28,6 +29,8 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useOrders } from '@/hooks/useOrders';
@@ -100,6 +103,14 @@ export function OrdersPage() {
     if (dt?.isValid()) setSelectedDate(dt.format('YYYY-MM-DD'));
   }, [setSelectedDate]);
 
+  const handlePrevDay = useCallback(() => {
+    setSelectedDate(dayjs(selectedDate).subtract(1, 'day').format('YYYY-MM-DD'));
+  }, [selectedDate, setSelectedDate]);
+
+  const handleNextDay = useCallback(() => {
+    setSelectedDate(dayjs(selectedDate).add(1, 'day').format('YYYY-MM-DD'));
+  }, [selectedDate, setSelectedDate]);
+
   const handleNewOrder = useCallback(() => {
     setNewOrderOpen(true);
   }, []);
@@ -135,16 +146,32 @@ export function OrdersPage() {
           spacing={1}
           sx={{ mb: 0.75 }}
         >
-          <DatePicker
-            value={dayjs(selectedDate)}
-            onChange={handleDateChange}
-            slotProps={{
-              textField: {
-                size: 'small',
-                sx: { width: { xs: 140, sm: 170 } },
-              },
-            }}
-          />
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <IconButton
+              size="small"
+              onClick={handlePrevDay}
+              sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+            >
+              <ChevronLeftIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+            <DatePicker
+              value={dayjs(selectedDate)}
+              onChange={handleDateChange}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { width: { xs: 140, sm: 170 } },
+                },
+              }}
+            />
+            <IconButton
+              size="small"
+              onClick={handleNextDay}
+              sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+            >
+              <ChevronRightIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Stack>
 
           <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
             {orders.length} orders · {orders.reduce((s, o) => s + o.volume, 0).toFixed(1)} yd³

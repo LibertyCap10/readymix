@@ -23,6 +23,8 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import TimelineIcon from '@mui/icons-material/Timeline';
@@ -88,6 +90,14 @@ export function MapToolbar({
     [onDateChange],
   );
 
+  const handlePrevDay = useCallback(() => {
+    onDateChange(dayjs(selectedDate).subtract(1, 'day').format('YYYY-MM-DD'));
+  }, [selectedDate, onDateChange]);
+
+  const handleNextDay = useCallback(() => {
+    onDateChange(dayjs(selectedDate).add(1, 'day').format('YYYY-MM-DD'));
+  }, [selectedDate, onDateChange]);
+
   return (
     <Paper
       elevation={0}
@@ -101,16 +111,32 @@ export function MapToolbar({
     >
       {/* Row 1: Date picker, toggles, search */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-        <DatePicker
-          value={dayjs(selectedDate)}
-          onChange={handleDateChange}
-          slotProps={{
-            textField: {
-              size: 'small',
-              sx: { width: { xs: 130, sm: 160 } },
-            },
-          }}
-        />
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <IconButton
+            size="small"
+            onClick={handlePrevDay}
+            sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+          >
+            <ChevronLeftIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+          <DatePicker
+            value={dayjs(selectedDate)}
+            onChange={handleDateChange}
+            slotProps={{
+              textField: {
+                size: 'small',
+                sx: { width: { xs: 130, sm: 160 } },
+              },
+            }}
+          />
+          <IconButton
+            size="small"
+            onClick={handleNextDay}
+            sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+          >
+            <ChevronRightIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Stack>
 
         {/* Order count summary */}
         {isFiltered && (

@@ -28,6 +28,7 @@ export function DispatchMapPage() {
     orders,
     allOrders,
     trucks,
+    allTrucks,
     availableTrucks,
     loading,
     error,
@@ -146,6 +147,7 @@ export function DispatchMapPage() {
             onClose={() => setAssignOrder(null)}
             order={assignOrder}
             availableTrucks={availableTrucks}
+            allTrucks={allTrucks}
             onAssign={handleDoAssign}
           />
         </Box>
@@ -190,6 +192,7 @@ export function DispatchMapPage() {
         onClose={() => setAssignOrder(null)}
         order={assignOrder}
         availableTrucks={availableTrucks}
+        allTrucks={allTrucks}
         onAssign={handleDoAssign}
       />
     </Box>

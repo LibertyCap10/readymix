@@ -1,6 +1,8 @@
 # ReadyMix Dashboard
 
-A concrete delivery dispatch and fleet management dashboard — the kind of internal tool a ready-mix concrete producer uses daily to manage orders, assign trucks, and track cycle times. Built as an interview prep project to cover the full stack of a target role: React, Material UI, AG Grid/Charts, AWS Lambda, DynamoDB, Aurora PostgreSQL, and CloudWatch.
+A concrete delivery dispatch and fleet management dashboard — the kind of internal tool a ready-mix concrete producer uses daily to manage orders, assign trucks, and track cycle times. Full-stack: React + Material UI + AG Grid/Charts on the frontend, AWS Lambda + DynamoDB + Aurora PostgreSQL on the backend.
+
+**Live at [readymix.earth](https://readymix.earth)**
 
 ---
 
@@ -25,7 +27,7 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 - AG Charts v13 Community — bar, line, and donut charts
 - Mapbox GL JS + react-map-gl — dispatch map with real-time truck tracking and driving routes
 - Storybook — component library documentation
-- Jest + React Testing Library — 93 tests across 13 suites
+- Jest + React Testing Library
 
 **Backend** *(Phases 4–6)*
 - AWS SAM — infrastructure as code
@@ -199,13 +201,6 @@ readymix/
 
 ## Getting Started
 
-NOTE TO SELF:   
-Serverless Aurora v2 is expensive (~$43/month).  Be sure to turn it down when not in-use: 
-
-```bash
-aws rds stop-db-cluster --db-cluster-identifier readymix-aurora-dev
-```
-
 ### Prerequisites
 
 ```bash
@@ -234,39 +229,6 @@ npm run storybook  # http://localhost:6006
 ```bash
 cd frontend
 npm test           
-```
-
-### Common Commands
-
-```bash
-### AWS ###
-aws s3 mb s3://my-bucket             # make a new bucket
-aws s3 ls                            # list all buckets
-aws s3 ls s3://my-bucket/            # list objects in a bucket
-aws s3 rm s3://my-bucket/file.zip    # delete an object
-aws s3 rb s3://my-bucket --force     # remove a bucket and all its contents
-aws configure
-aws sts get-caller-identity
-
-# post-deploy verification of output from template.yaml
-aws cloudformation describe-stacks \
-  --stack-name readymix-dashboard-dev \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
-  --output text 
-
-### SAM ###
-sam build                           # compile and prepare your Lambda functions and layers
-sam local start-api                 # spin up a local API Gateway for testing
-sam validate                        # check your template.yaml for errors
-sam package --s3-bucket my-bucket --output-template-file packaged.yaml # package artifacts and upload to S3 (older workflow, sam deploy --guided handles this now)
-sam deploy --guided                 # interactive first-time deploy (creates/uses a samconfig.toml for future runs)
-sam deploy                          # deploy using saved samconfig.toml settings
-sam delete --stack-name my-stack    # tear down the entire CloudFormation stack
-
-### FLAGS FOR BOTH ###
---profile my-profile          # use a named AWS credentials profile
---region us-east-1            # target a specific region
---no-confirm-changeset        # skip the changeset approval prompt on deploy
 ```
 
 ### Running locally 
@@ -404,22 +366,13 @@ aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
 
 # Get CloudFront URL
 aws cloudformation describe-stacks \
-  --stack-name readymix-dashboard-dev \
+  --stack-name readymix-dashboard \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendUrl'].OutputValue" \
   --output text
 
   ```
 
 
-  ### Concise Backend & Frontend Build and Deploy
-
-  ```bash
-  cd backend && sam build && sam deploy
-
-cd ../frontend && npm run build
-aws s3 sync dist/ s3://readymix-frontend-dev --delete
-aws cloudfront create-invalidation --distribution-id E3PP93ZEFWRQHE --paths "/*"
-```
 ---
 
 ## Domain Primer
@@ -443,7 +396,7 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 
 ## API Reference
 
-*Phase 4–5 — not yet implemented. Endpoints documented here for planning.*
+REST API served by AWS API Gateway + Lambda.
 
 ### Orders Service
 
@@ -451,19 +404,16 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 |---|---|---|---|
 | `GET` | `/orders?plantId&date&status` | DynamoDB | Today's active orders for the dispatch board |
 | `GET` | `/orders/:ticketId` | DynamoDB | Single active order |
-| `GET` | `/orders/:ticketId/detail` | Aurora + DynamoDB | Full detail: customer info, mix ingredients, event timeline |
 | `POST` | `/orders` | DynamoDB + Aurora | Create ticket (FK-validate customer/plant/mix against Aurora) |
 | `PATCH` | `/orders/:ticketId` | DynamoDB | Update status, assign truck, add note |
-| `POST` | `/orders/:ticketId/complete` | DynamoDB → Aurora | Archive to `delivery_history`; remove active record |
 
 ### Fleet Service
 
 | Method | Route | DB | Description |
 |---|---|---|---|
 | `GET` | `/fleet?plantId` | Aurora + DynamoDB | Roster: master data merged with live status |
-| `GET` | `/fleet/status?plantId` | DynamoDB | Real-time status only (for the live ticker polling) |
+| `GET` | `/fleet/:truckId` | DynamoDB | Single truck status |
 | `PATCH` | `/fleet/:truckId/status` | DynamoDB | Update real-time status and location |
-| `GET` | `/drivers?plantId` | Aurora | Drivers at a plant with certifications |
 
 ### Analytics Service
 
@@ -473,6 +423,7 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 | `GET` | `/analytics/utilization?plantId` | Aurora | Productive / idle / maintenance hours |
 | `GET` | `/analytics/cycle-times?plantId` | Aurora | Avg cycle time trend (window functions) |
 | `GET` | `/analytics/customers?plantId` | Aurora | Top customers by volume + on-time rate |
+| `GET` | `/analytics/drivers?plantId` | Aurora | Driver performance leaderboard |
 
 ### Mix Designs Service
 
@@ -491,5 +442,6 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 | Method | Route | DB | Description |
 |---|---|---|---|
 | `GET` | `/customers/search?q` | Aurora | Debounced typeahead for the New Order form |
+| `GET` | `/customers/:customerId/job-sites` | Aurora | Job sites for a customer |
 | `GET` | `/plants` | Aurora | All plants |
 
