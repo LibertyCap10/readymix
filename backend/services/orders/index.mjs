@@ -242,6 +242,8 @@ async function createOrder(event) {
     jobSiteId:        body.jobSiteId,
     jobSiteName:      body.jobSiteName,
     jobSiteAddress:   body.jobSiteAddress,
+    jobSiteLatitude:  body.jobSiteLatitude ?? null,
+    jobSiteLongitude: body.jobSiteLongitude ?? null,
     mixDesignId:      body.mixDesignId,
     mixDesignName:    body.mixDesignName,
     psi,
@@ -542,7 +544,9 @@ async function listJobSites(event) {
        name,
        address,
        city,
-       state
+       state,
+       lat       AS "latitude",
+       lng       AS "longitude"
      FROM customer_job_sites
      WHERE customer_id = :customerId::UUID
        AND is_active = true

@@ -8,7 +8,8 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 
 | View | Description |
 |---|---|
-| **Dispatch Board** | Today's delivery orders grouped by status, filterable by date and status. Assign trucks, update status, and create new orders from a form-validated dialog. Click any row to open a full-detail drawer with customer info, mix design, and status timeline. |
+| **Orders Board** | Today's delivery orders grouped by status, filterable by date and status. Assign trucks, update status, and create new orders from a form-validated dialog. Click any row to open a full-detail drawer with customer info, mix design, and status timeline. |
+| **Dispatch Map** | Mapbox-powered real-time map view of today's deliveries. Plant, truck, and job-site markers with status-colored indicators. Driving routes from Mapbox Directions API for dispatched/in-transit orders. One-click truck assignment, status updates, and cancellation from map popups. Collapsible side panel on desktop, bottom sheet on mobile. |
 | **Mix Designs** | Browse, create, and edit concrete mix recipes. AG Grid table with PSI, slump range, cost, and recommended application tags (driveway, foundation, sidewalk, etc.). Click any row for a full ingredient/admixture breakdown. Filter by application type or toggle inactive mixes. |
 | **Fleet View** | Live truck status updated every 10 seconds. Three AG Charts panels (bar: status distribution, line: 7-day cycle time trend, donut: fleet utilization %). AG Grid truck roster showing driver, capacity, current job site, and last washout. |
 | **Analytics** | Historical volume trends, on-time delivery rates, and customer reports from Aurora PostgreSQL. |
@@ -22,6 +23,7 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 - Material UI v6 (custom theme: slate gray `#37474F` + safety orange `#FF6D00`)
 - AG Grid v35 Community — dispatch board with status-grouped rows and custom cell renderers
 - AG Charts v13 Community — bar, line, and donut charts
+- Mapbox GL JS + react-map-gl — dispatch map with real-time truck tracking and driving routes
 - Storybook — component library documentation
 - Jest + React Testing Library — 93 tests across 13 suites
 
@@ -43,14 +45,14 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 │         React 18 + MUI v6 + AG Grid v35 + AG Charts v13         │
 │         Vite dev server  ·  Storybook  ·  Jest + RTL            │
 │                                                                 │
-│   /dispatch          /mixes             /fleet             /analytics    │
-│   DispatchPage       MixesPage          FleetPage          AnalyticsPage │
-│   ├─ DispatchGrid    ├─ MixDesignGrid   ├─ FleetStatusChart              │
-│   ├─ MobileOrderList ├─ MobileMixList   ├─ CycleTimeChart               │
-│   ├─ NewOrderDialog  ├─ MixFormDialog   ├─ UtilizationChart             │
-│   └─ OrderDrawer     └─ MixDrawer       └─ TruckRoster                  │
-│                                                                          │
-│   Data hooks: useOrders · useMixDesigns · useFleet · useAnalytics        │
+│  /mixes        /fleet          /orders         /dispatch        /analytics    │
+│  MixesPage     FleetPage       OrdersPage      DispatchMapPage  AnalyticsPage │
+│  ├─ MixGrid    ├─ StatusChart  ├─ OrderGrid    ├─ MapView (Mapbox)            │
+│  ├─ MixCards   ├─ CycleChart   ├─ MobileList   ├─ SidePanel / BottomSheet     │
+│  ├─ MixForm    ├─ UtilChart    ├─ NewOrder     ├─ AssignTruckDialog           │
+│  └─ MixDrawer  └─ TruckRoster └─ OrderDrawer  └─ Route lines + popups        │
+│                                                                               │
+│  Data hooks: useMixDesigns · useFleet · useOrders · useDispatchMap · useAnalytics │
 │   (Phase 1–3: mock data  ·  Phase 6: real API calls)            │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ REST / JSON
@@ -126,9 +128,11 @@ readymix/
 │   │   ├── context/
 │   │   │   └── PlantContext.tsx          # Selected plant; localStorage persistence
 │   │   ├── features/
-│   │   │   ├── dispatch/                 # DispatchPage, DispatchGrid, MobileOrderList,
+│   │   │   ├── dispatch/                 # OrdersPage (AG Grid order board),
 │   │   │   │   ├── cellRenderers/        # NewOrderDialog, orderValidation, columnDefs
 │   │   │   │   └── ...                   # cell renderers: Status, TruckAssignment, Time, HotLoad
+│   │   │   ├── dispatch-map/             # DispatchMapPage (Mapbox map), MapView,
+│   │   │   │   └── ...                   # SidePanel, BottomSheet, AssignTruckDialog, hooks
 │   │   │   ├── mixes/                    # MixesPage, MixDesignGrid, MobileMixList,
 │   │   │   │   └── ...                   # MixDesignDetailDrawer, MixDesignFormDialog
 │   │   │   ├── fleet/                    # FleetPage, FleetStatusChart, CycleTimeChart,
@@ -348,8 +352,9 @@ sam local start-api --port 3001 --env-vars env.json --warm-containers EAGER
 
 cd frontend
 npm install
-# Create .env.local pointing to local API:
+# Create .env.local pointing to local API + Mapbox token:
 echo "VITE_API_URL=http://localhost:3001" > .env.local
+echo "VITE_MAPBOX_TOKEN=pk.your_mapbox_token_here" >> .env.local
 npm run dev    # http://localhost:3000
 
 -------------------------------

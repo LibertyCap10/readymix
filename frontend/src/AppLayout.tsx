@@ -15,13 +15,15 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ScienceIcon from '@mui/icons-material/Science';
+import MapIcon from '@mui/icons-material/Map';
 import { PlantSelector } from './components/PlantSelector';
 import { usePlant } from './context/PlantContext';
 
 const navItems = [
-  { label: 'Dispatch', path: '/dispatch', icon: <ViewListIcon /> },
   { label: 'Mixes', path: '/mixes', icon: <ScienceIcon /> },
   { label: 'Fleet', path: '/fleet', icon: <LocalShippingIcon /> },
+  { label: 'Orders', path: '/orders', icon: <ViewListIcon /> },
+  { label: 'Dispatch', path: '/dispatch', icon: <MapIcon /> },
   { label: 'Analytics', path: '/analytics', icon: <BarChartIcon /> },
 ];
 

@@ -56,7 +56,7 @@ const FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function DispatchPage() {
+export function OrdersPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md')); // ≤900px
 

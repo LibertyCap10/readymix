@@ -167,6 +167,8 @@ export interface Order {
   jobSiteId: string;
   jobSiteName: string;
   jobSiteAddress: string;
+  jobSiteLatitude?: number;
+  jobSiteLongitude?: number;
   mixDesignId: string;
   mixDesignName: string;
   psi: number;
