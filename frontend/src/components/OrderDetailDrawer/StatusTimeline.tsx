@@ -17,7 +17,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import CancelIcon from '@mui/icons-material/Cancel';
 import dayjs from 'dayjs';
-import type { DeliveryEvent } from '@/mocks/types';
+import type { DeliveryEvent } from '@/types/domain';
 import { orderStatusColors } from '@/theme/statusColors';
 import type { OrderStatus } from '@/theme/statusColors';
 

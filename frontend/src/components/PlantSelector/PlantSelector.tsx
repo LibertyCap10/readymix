@@ -2,7 +2,7 @@ import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import FactoryIcon from '@mui/icons-material/Factory';
 import InputAdornment from '@mui/material/InputAdornment';
-import type { Plant } from '../../mocks/types';
+import type { Plant } from '@/types/domain';
 
 interface PlantSelectorProps {
   plants: Plant[];
@@ -24,7 +24,7 @@ export default function PlantSelector({ plants, selectedPlant, onPlantChange }: 
       }}
       disableClearable
       size="small"
-      sx={{ width: 280 }}
+      sx={{ width: { xs: 160, sm: 220, md: 280 } }}
       renderInput={(params) => (
         <TextField
           {...params}

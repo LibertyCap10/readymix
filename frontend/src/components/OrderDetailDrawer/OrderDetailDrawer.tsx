@@ -10,6 +10,7 @@
  *   6. Status Timeline — event log
  */
 
+import { useState, useEffect } from 'react';
 import {
   Drawer,
   Box,
@@ -17,6 +18,7 @@ import {
   IconButton,
   Divider,
   Chip,
+  CircularProgress,
   Stack,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -25,9 +27,17 @@ import PersonIcon from '@mui/icons-material/Person';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import dayjs from 'dayjs';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 import { StatusChip } from '@/components/StatusChip';
 import { StatusTimeline } from './StatusTimeline';
+import { api } from '@/api/client';
+
+interface MixDesignDetail {
+  name: string;
+  psi: number;
+  ingredients: Array<{ name: string; quantity: number; unit: string }>;
+  admixtures: Array<{ name: string; type: string; dosage: number; unit: string }>;
+}
 
 interface OrderDetailDrawerProps {
   order: Order | null;
@@ -76,6 +86,21 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function OrderDetailDrawer({ order, open, onClose }: OrderDetailDrawerProps) {
+  const [mixDetail, setMixDetail] = useState<MixDesignDetail | null>(null);
+  const [mixLoading, setMixLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !order?.mixDesignId) {
+      setMixDetail(null);
+      return;
+    }
+    setMixLoading(true);
+    api.get<MixDesignDetail>(`/mix-designs/${order.mixDesignId}`)
+      .then(setMixDetail)
+      .catch(() => setMixDetail(null))
+      .finally(() => setMixLoading(false));
+  }, [open, order?.mixDesignId]);
+
   return (
     <Drawer
       anchor="right"
@@ -198,20 +223,38 @@ export function OrderDetailDrawer({ order, open, onClose }: OrderDetailDrawerPro
           <Typography variant="caption" color="text.secondary" display="block" mb={1}>
             {order.mixDesignName} · {order.psi} PSI · Slump {order.slump}"
           </Typography>
-          {/* Phase 2: shows design name only; Phase 6 will fetch full ingredient list */}
-          <Box
-            sx={{
-              p: 1.5,
-              bgcolor: 'grey.50',
-              borderRadius: 1,
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
+          {mixLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={20} />
+            </Box>
+          ) : mixDetail ? (
+            <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+              {mixDetail.ingredients.length > 0 && (
+                <>
+                  <Typography variant="caption" fontWeight={600} display="block" mb={0.5}>Ingredients (per yd³)</Typography>
+                  {mixDetail.ingredients.map((ing) => (
+                    <Typography key={ing.name} variant="caption" display="block" color="text.secondary">
+                      {ing.name} — {ing.quantity} {ing.unit}
+                    </Typography>
+                  ))}
+                </>
+              )}
+              {mixDetail.admixtures.length > 0 && (
+                <>
+                  <Typography variant="caption" fontWeight={600} display="block" mt={1} mb={0.5}>Admixtures</Typography>
+                  {mixDetail.admixtures.map((adm) => (
+                    <Typography key={adm.name} variant="caption" display="block" color="text.secondary">
+                      {adm.name} ({adm.type.replace('_', ' ')}) — {adm.dosage} {adm.unit}
+                    </Typography>
+                  ))}
+                </>
+              )}
+            </Box>
+          ) : (
             <Typography variant="caption" color="text.secondary">
-              Full ingredient breakdown available after Aurora backend integration (Phase 5).
+              Ingredient details unavailable.
             </Typography>
-          </Box>
+          )}
 
           {/* ── Status Timeline ─────────────────────────────────────── */}
           <Divider sx={{ my: 1.5 }} />

@@ -21,7 +21,7 @@ import PlaceIcon from '@mui/icons-material/Place';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import dayjs from 'dayjs';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 import { StatusChip } from '@/components/StatusChip';
 
 interface MobileOrderListProps {

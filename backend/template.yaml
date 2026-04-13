@@ -21,8 +21,8 @@ Globals:
         PLANTS_TABLE:  !Ref PlantsTable
         REGION:        !Ref AWS::Region
         ENVIRONMENT:   !Ref Environment
-        AURORA_CLUSTER_ARN: !GetAtt AuroraCluster.DBClusterArn
-        AURORA_SECRET_ARN:  !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+        AURORA_CLUSTER_ARN: arn:aws:rds:us-east-1:357912269728:cluster:readymix-aurora-dev
+        AURORA_SECRET_ARN:  arn:aws:secretsmanager:us-east-1:357912269728:secret:readymix-aurora-dev-credentials-uEIoa2
         AURORA_DATABASE:    readymix
         USE_LOCAL_PG:       ""
         PG_CONNECTION_STRING: ""
@@ -41,14 +41,6 @@ Parameters:
     Default: dev
     AllowedValues: [dev, staging, prod]
     Description: Deployment environment (used to namespace all resource names)
-  AuroraMinACU:
-    Type: Number
-    Default: 0.5
-    Description: Minimum Aurora Capacity Units (0.5 = near-zero idle cost)
-  AuroraMaxACU:
-    Type: Number
-    Default: 4
-    Description: Maximum Aurora Capacity Units
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Resources
@@ -153,96 +145,10 @@ Resources:
   # ═══════════════════════════════════════════════════════════════════════════
   # AURORA SERVERLESS V2 (PostgreSQL)
   # ═══════════════════════════════════════════════════════════════════════════
-
-  AuroraCluster:
-    Type: AWS::RDS::DBCluster
-    Properties:
-      DBClusterIdentifier: !Sub readymix-aurora-${Environment}
-      Engine: aurora-postgresql
-      EngineVersion: "15.4"
-      EngineMode: provisioned           # Serverless v2 uses "provisioned" mode
-      ServerlessV2ScalingConfiguration:
-        MinCapacity: !Ref AuroraMinACU
-        MaxCapacity: !Ref AuroraMaxACU
-      MasterUsername: readymix_admin
-      ManageMasterUserPassword: true    # Auto-generates and stores in Secrets Manager
-      DatabaseName: readymix
-      EnableHttpEndpoint: true          # Enables the RDS Data API
-      StorageEncrypted: true
-      DeletionProtection: false         # Set to true for production
-      BackupRetentionPeriod: 7
-      VpcSecurityGroupIds:
-        - !Ref AuroraSecurityGroup
-      DBSubnetGroupName: !Ref AuroraSubnetGroup
-      Tags:
-        - Key: Project
-          Value: ReadyMix
-        - Key: Environment
-          Value: !Ref Environment
-
-  AuroraInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBInstanceIdentifier: !Sub readymix-aurora-instance-${Environment}
-      DBClusterIdentifier: !Ref AuroraCluster
-      DBInstanceClass: db.serverless    # This is what makes it Serverless v2
-      Engine: aurora-postgresql
-      PubliclyAccessible: false
-
+  # AURORA (managed outside CloudFormation via express configuration)
+  # Cluster: readymix-aurora-dev
+  # Created with: aws rds create-db-cluster --with-express-configuration
   # ═══════════════════════════════════════════════════════════════════════════
-  # NETWORKING (minimal VPC for Aurora)
-  # ═══════════════════════════════════════════════════════════════════════════
-  # Aurora requires a VPC, but Lambdas stay OUTSIDE the VPC.
-  # They access Aurora via the RDS Data API (HTTP), not direct TCP.
-
-  AuroraVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub readymix-vpc-${Environment}
-
-  PrivateSubnetA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref AuroraVPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub readymix-private-a-${Environment}
-
-  PrivateSubnetB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref AuroraVPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub readymix-private-b-${Environment}
-
-  AuroraSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Subnets for Aurora cluster
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
-
-  AuroraSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Aurora access (Data API bypasses this, but required for provisioning)
-      VpcId: !Ref AuroraVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          CidrIp: 10.0.0.0/16
 
   # ═══════════════════════════════════════════════════════════════════════════
   # SHARED LAMBDA LAYER
@@ -285,11 +191,11 @@ Resources:
                 - rds-data:BeginTransaction
                 - rds-data:CommitTransaction
                 - rds-data:RollbackTransaction
-              Resource: !GetAtt AuroraCluster.DBClusterArn
+              Resource: arn:aws:rds:us-east-1:357912269728:cluster:readymix-aurora-dev
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
-              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+              Resource: arn:aws:secretsmanager:us-east-1:357912269728:secret:readymix-aurora-dev-credentials-uEIoa2
       Events:
         ListOrders:
           Type: Api
@@ -331,6 +237,36 @@ Resources:
           Properties:
             Path: /customers/{customerId}/job-sites
             Method: get
+        GetMixDesign:
+          Type: Api
+          Properties:
+            Path: /mix-designs/{mixDesignId}
+            Method: get
+        CreateMixDesign:
+          Type: Api
+          Properties:
+            Path: /mix-designs
+            Method: post
+        UpdateMixDesign:
+          Type: Api
+          Properties:
+            Path: /mix-designs/{mixDesignId}
+            Method: patch
+        ToggleMixDesignStatus:
+          Type: Api
+          Properties:
+            Path: /mix-designs/{mixDesignId}/status
+            Method: patch
+        ListIngredients:
+          Type: Api
+          Properties:
+            Path: /ingredients
+            Method: get
+        ListAdmixtures:
+          Type: Api
+          Properties:
+            Path: /admixtures
+            Method: get
 
   OrdersFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -362,11 +298,11 @@ Resources:
                 - rds-data:BeginTransaction
                 - rds-data:CommitTransaction
                 - rds-data:RollbackTransaction
-              Resource: !GetAtt AuroraCluster.DBClusterArn
+              Resource: arn:aws:rds:us-east-1:357912269728:cluster:readymix-aurora-dev
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
-              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+              Resource: arn:aws:secretsmanager:us-east-1:357912269728:secret:readymix-aurora-dev-credentials-uEIoa2
       Events:
         ListFleet:
           Type: Api
@@ -415,11 +351,11 @@ Resources:
                 - rds-data:BeginTransaction
                 - rds-data:CommitTransaction
                 - rds-data:RollbackTransaction
-              Resource: !GetAtt AuroraCluster.DBClusterArn
+              Resource: arn:aws:rds:us-east-1:357912269728:cluster:readymix-aurora-dev
             - Effect: Allow
               Action:
                 - secretsmanager:GetSecretValue
-              Resource: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+              Resource: arn:aws:secretsmanager:us-east-1:357912269728:secret:readymix-aurora-dev-credentials-uEIoa2
       Events:
         GetVolume:
           Type: Api
@@ -680,11 +616,8 @@ Outputs:
       Value: !Ref FrontendDistribution
 
   AuroraClusterArn:
-    Description: Aurora cluster ARN — used by run-schema.mjs and Lambda env vars
-    Value: !GetAtt AuroraCluster.DBClusterArn
+    Description: Aurora cluster ARN (managed outside CloudFormation)
+    Value: arn:aws:rds:us-east-1:357912269728:cluster:readymix-aurora-dev
   AuroraSecretArn:
-    Description: Secrets Manager ARN for Aurora master password
-    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
-  AuroraEndpoint:
-    Description: Aurora cluster endpoint (for direct connections if needed)
-    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Description: Secrets Manager ARN for Aurora credentials
+    Value: arn:aws:secretsmanager:us-east-1:357912269728:secret:readymix-aurora-dev-credentials-uEIoa2

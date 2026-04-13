@@ -12,7 +12,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { themeQuartz, type ColDef } from 'ag-grid-community';
 import { Box, Typography, Chip } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
-import type { Truck } from '@/mocks/types';
+import type { Truck } from '@/types/domain';
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { StatusChip } from '@/components/StatusChip';
 import type { TruckStatus } from '@/theme/statusColors';
@@ -43,13 +43,15 @@ function DriverRenderer(props: CustomCellRendererProps<Truck>) {
   const truck = props.data;
   if (!truck) return null;
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
       <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', lineHeight: 1.3 }}>
         {truck.driver.name}
       </Typography>
-      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.3 }}>
-        {truck.driver.certifications.slice(0, 2).join(', ')}
-      </Typography>
+      {truck.driver.certifications.length > 0 && (
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.3 }}>
+          {truck.driver.certifications.slice(0, 2).join(', ')}
+        </Typography>
+      )}
     </Box>
   );
 }

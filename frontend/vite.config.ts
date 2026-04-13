@@ -12,5 +12,13 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
+    proxy: {
+      '/orders': 'http://localhost:3001',
+      '/fleet': 'http://localhost:3001',
+      '/analytics': 'http://localhost:3001',
+      '/customers': 'http://localhost:3001',
+      '/plants': 'http://localhost:3001',
+      '/mix-designs': 'http://localhost:3001',
+    },
   },
 });

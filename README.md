@@ -9,8 +9,9 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 | View | Description |
 |---|---|
 | **Dispatch Board** | Today's delivery orders grouped by status, filterable by date and status. Assign trucks, update status, and create new orders from a form-validated dialog. Click any row to open a full-detail drawer with customer info, mix design, and status timeline. |
+| **Mix Designs** | Browse, create, and edit concrete mix recipes. AG Grid table with PSI, slump range, cost, and recommended application tags (driveway, foundation, sidewalk, etc.). Click any row for a full ingredient/admixture breakdown. Filter by application type or toggle inactive mixes. |
 | **Fleet View** | Live truck status updated every 10 seconds. Three AG Charts panels (bar: status distribution, line: 7-day cycle time trend, donut: fleet utilization %). AG Grid truck roster showing driver, capacity, current job site, and last washout. |
-| **Analytics** | *(Phase 6)* Historical volume trends, on-time delivery rates, and customer reports from Aurora PostgreSQL. |
+| **Analytics** | Historical volume trends, on-time delivery rates, and customer reports from Aurora PostgreSQL. |
 
 ---
 
@@ -42,14 +43,14 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 │         React 18 + MUI v6 + AG Grid v35 + AG Charts v13         │
 │         Vite dev server  ·  Storybook  ·  Jest + RTL            │
 │                                                                 │
-│   /dispatch          /fleet             /analytics              │
-│   DispatchPage       FleetPage          AnalyticsPage           │
-│   ├─ DispatchGrid    ├─ FleetStatusChart  (Phase 6)             │
-│   ├─ MobileOrderList ├─ CycleTimeChart                          │
-│   ├─ NewOrderDialog  ├─ UtilizationChart                        │
-│   └─ OrderDrawer     └─ TruckRoster                             │
-│                                                                 │
-│   Data hooks: useOrders · useFleet · useAnalytics               │
+│   /dispatch          /mixes             /fleet             /analytics    │
+│   DispatchPage       MixesPage          FleetPage          AnalyticsPage │
+│   ├─ DispatchGrid    ├─ MixDesignGrid   ├─ FleetStatusChart              │
+│   ├─ MobileOrderList ├─ MobileMixList   ├─ CycleTimeChart               │
+│   ├─ NewOrderDialog  ├─ MixFormDialog   ├─ UtilizationChart             │
+│   └─ OrderDrawer     └─ MixDrawer       └─ TruckRoster                  │
+│                                                                          │
+│   Data hooks: useOrders · useMixDesigns · useFleet · useAnalytics        │
 │   (Phase 1–3: mock data  ·  Phase 6: real API calls)            │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ REST / JSON
@@ -128,12 +129,18 @@ readymix/
 │   │   │   ├── dispatch/                 # DispatchPage, DispatchGrid, MobileOrderList,
 │   │   │   │   ├── cellRenderers/        # NewOrderDialog, orderValidation, columnDefs
 │   │   │   │   └── ...                   # cell renderers: Status, TruckAssignment, Time, HotLoad
-│   │   │   └── fleet/                    # FleetPage, FleetStatusChart, CycleTimeChart,
-│   │   │       └── ...                   # UtilizationChart, TruckRoster, useFleetTicker
+│   │   │   ├── mixes/                    # MixesPage, MixDesignGrid, MobileMixList,
+│   │   │   │   └── ...                   # MixDesignDetailDrawer, MixDesignFormDialog
+│   │   │   ├── fleet/                    # FleetPage, FleetStatusChart, CycleTimeChart,
+│   │   │   │   └── ...                   # UtilizationChart, TruckRoster, useFleetTicker
+│   │   │   └── analytics/               # AnalyticsPage, KpiCards, VolumeChart,
+│   │   │       └── ...                   # CycleTimeChart, CustomerTable, DriverTable
 │   │   ├── hooks/
 │   │   │   ├── useOrders.ts              # Active orders data layer
+│   │   │   ├── useMixDesigns.ts          # Mix design CRUD + filtering
 │   │   │   ├── useFleet.ts               # Trucks with live statuses
-│   │   │   └── useAnalytics.ts           # Cycle time + utilization data
+│   │   │   ├── useAnalytics.ts           # Cycle time + utilization data
+│   │   │   └── useAnalyticsDashboard.ts  # Dashboard analytics data
 │   │   ├── mocks/                        # Mock fixtures (replaced in Phase 6)
 │   │   │   ├── types.ts                  # Shared TypeScript interfaces
 │   │   │   ├── orders.ts / trucks.ts     # 20 orders, 8 trucks
@@ -187,6 +194,13 @@ readymix/
 ---
 
 ## Getting Started
+
+NOTE TO SELF:   
+Serverless Aurora v2 is expensive (~$43/month).  Be sure to turn it down when not in-use: 
+
+```bash
+aws rds stop-db-cluster --db-cluster-identifier readymix-aurora-dev
+```
 
 ### Prerequisites
 
@@ -291,6 +305,10 @@ docker run -d --name readymix-pg \
 psql postgresql://readymix_admin:localdev123@localhost:5432/readymix \
   -f database/schema.sql
 
+# Optiona: if there's an issue with Aurora, drop and recreate. Then re-seed data using above command
+psql postgresql://readymix_admin:localdev123@localhost:5432/postgres \
+  -c "DROP DATABASE readymix;" -c "CREATE DATABASE readymix;"
+
 # DynamoDB seed (after SAM local is running or tables exist)
 cd backend/scripts && node seed-dynamodb.mjs
 
@@ -386,6 +404,17 @@ aws cloudformation describe-stacks \
   --output text
 
   ```
+
+
+  ### Concise Backend & Frontend Build and Deploy
+
+  ```bash
+  cd backend && sam build && sam deploy
+
+cd ../frontend && npm run build
+aws s3 sync dist/ s3://readymix-frontend-dev --delete
+aws cloudfront create-invalidation --distribution-id E3PP93ZEFWRQHE --paths "/*"
+```
 ---
 
 ## Domain Primer
@@ -440,11 +469,22 @@ Understanding ready-mix concrete vocabulary helps explain the data model:
 | `GET` | `/analytics/cycle-times?plantId` | Aurora | Avg cycle time trend (window functions) |
 | `GET` | `/analytics/customers?plantId` | Aurora | Top customers by volume + on-time rate |
 
+### Mix Designs Service
+
+| Method | Route | DB | Description |
+|---|---|---|---|
+| `GET` | `/mix-designs?plantId&psiMin&psiMax&pourType&includeInactive` | Aurora | List mix designs with filtering (applications, PSI range, active status) |
+| `GET` | `/mix-designs/:mixDesignId` | Aurora | Full detail: ingredients, admixtures, applications |
+| `POST` | `/mix-designs` | Aurora | Create mix design with ingredients, admixtures, applications (transactional) |
+| `PATCH` | `/mix-designs/:mixDesignId` | Aurora | Update mix design fields, replace ingredients/admixtures/applications |
+| `PATCH` | `/mix-designs/:mixDesignId/status` | Aurora | Toggle is_active |
+| `GET` | `/ingredients` | Aurora | Master ingredient list (for form autocomplete) |
+| `GET` | `/admixtures` | Aurora | Master admixture list (for form autocomplete) |
+
 ### Reference Data
 
 | Method | Route | DB | Description |
 |---|---|---|---|
 | `GET` | `/customers/search?q` | Aurora | Debounced typeahead for the New Order form |
-| `GET` | `/mix-designs?plantId` | Aurora | Available mix designs for a plant |
 | `GET` | `/plants` | Aurora | All plants |
 

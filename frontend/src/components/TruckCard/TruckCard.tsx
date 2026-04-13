@@ -6,7 +6,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PersonIcon from '@mui/icons-material/Person';
 import PlaceIcon from '@mui/icons-material/Place';
 import { StatusChip } from '../StatusChip';
-import type { Truck } from '../../mocks/types';
+import type { Truck } from '@/types/domain';
 
 interface TruckCardProps {
   truck: Truck;

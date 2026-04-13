@@ -17,8 +17,9 @@
  *           logic itself doesn't change.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
+  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -36,10 +37,28 @@ import {
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { type Dayjs } from 'dayjs';
-import { customers, mixDesigns } from '@/mocks';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 import { validateOrder, type ValidationErrors } from './orderValidation';
 import type { NewOrderDraft } from '@/hooks/useOrders';
+import { api } from '@/api/client';
+import { usePlant } from '@/context/PlantContext';
+
+interface ApiMixDesign {
+  mixDesignId: string;
+  name: string;
+  code: string;
+  psi: number;
+  slumpMin: number;
+  slumpMax: number;
+}
+
+interface SearchCustomer {
+  id: string;
+  name: string;
+  accountNumber: string;
+  city: string;
+  state: string;
+}
 
 const POUR_TYPES: Array<{ value: Order['pourType']; label: string }> = [
   { value: 'foundation', label: 'Foundation' },
@@ -97,18 +116,63 @@ interface NewOrderDialogProps {
 }
 
 export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps) {
+  const { selectedPlant } = usePlant();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitted, setSubmitted] = useState(false);
 
-  // Reset form when dialog opens
+  // ── Fetch mix designs from API ─────────────────────────────────────────
+  const [mixDesigns, setMixDesigns] = useState<ApiMixDesign[]>([]);
+
+  useEffect(() => {
+    api.get<{ mixDesigns: ApiMixDesign[] }>('/mix-designs', { plantId: selectedPlant.plantId })
+      .then((data) => setMixDesigns(data.mixDesigns))
+      .catch(() => setMixDesigns([]));
+  }, [selectedPlant.plantId]);
+
+  // ── Debounced customer search ──────────────────────────────────────────
+  const [customerInput, setCustomerInput] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<SearchCustomer[]>([]);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<SearchCustomer | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Reset form and load initial customers when dialog opens
   useEffect(() => {
     if (open) {
       setForm(EMPTY_FORM);
       setErrors({});
       setSubmitted(false);
+      setCustomerInput('');
+      setSelectedCustomer(null);
+      // Fetch all customers for initial dropdown
+      api.get<{ customers: SearchCustomer[] }>('/customers/search')
+        .then((data) => setCustomerOptions(data.customers))
+        .catch(() => setCustomerOptions([]));
     }
   }, [open]);
+
+  // Debounced search as user types
+  useEffect(() => {
+    if (!open) return;
+
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setCustomerLoading(true);
+      try {
+        const params: Record<string, string> = {};
+        if (customerInput.length > 0) params.q = customerInput;
+        const data = await api.get<{ customers: SearchCustomer[] }>('/customers/search', params);
+        setCustomerOptions(data.customers);
+      } catch {
+        setCustomerOptions([]);
+      } finally {
+        setCustomerLoading(false);
+      }
+    }, customerInput.length === 0 ? 0 : 300);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [customerInput, open]);
 
   // Re-validate on change once the user has already tried to submit
   useEffect(() => {
@@ -117,8 +181,20 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
     }
   }, [form, submitted]);
 
-  const selectedCustomer = customers.find((c) => c.customerId === form.customerId) ?? null;
-  const jobSites = selectedCustomer?.jobSites ?? [];
+  // Fetch job sites when a customer is selected
+  const [jobSites, setJobSites] = useState<Array<{ siteId: string; name: string; address: string; city: string; state: string }>>([]);
+
+  useEffect(() => {
+    if (!form.customerId) {
+      setJobSites([]);
+      return;
+    }
+    api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string }> }>(
+      `/customers/${form.customerId}/job-sites`
+    )
+      .then((data) => setJobSites(data.jobSites))
+      .catch(() => setJobSites([]));
+  }, [form.customerId]);
 
   function buildDraft(f: FormState): Partial<NewOrderDraft> {
     return {
@@ -162,30 +238,58 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
       <DialogContent dividers>
         <Grid2 container spacing={2}>
 
-          {/* ── Customer ──────────────────────────────────────────── */}
+          {/* ── Customer (debounced API typeahead) ────────────────── */}
           <Grid2 size={12}>
             <Autocomplete
-              options={customers}
+              options={customerOptions}
               getOptionLabel={(c) => c.name}
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
+              filterOptions={(x) => x}
               value={selectedCustomer}
+              loading={customerLoading}
+              inputValue={customerInput}
+              onInputChange={(_, value) => setCustomerInput(value)}
+              noOptionsText={customerInput.length > 0 ? 'No customers found' : 'Start typing to search...'}
               onChange={(_, c) => {
+                setSelectedCustomer(c);
                 setForm((prev) => ({
                   ...prev,
-                  customerId: c?.customerId ?? '',
+                  customerId: c?.id ?? '',
                   customerName: c?.name ?? '',
-                  // Reset job site when customer changes
                   jobSiteId: '',
                   jobSiteName: '',
                   jobSiteAddress: '',
                 }));
               }}
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box>
+                    <Typography variant="body2">{option.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.accountNumber} · {option.city}, {option.state}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Customer *"
+                  placeholder="Start typing to search..."
                   error={!!errors.customerId}
                   helperText={errors.customerId}
                   size="small"
+                  slotProps={{
+                    input: {
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {customerLoading ? <CircularProgress color="inherit" size={18} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    },
+                  }}
                 />
               )}
             />

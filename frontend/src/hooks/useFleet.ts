@@ -1,20 +1,14 @@
 /**
  * useFleet — data hook for the Fleet View.
  *
- * Returns trucks for the selected plant with live-updating statuses from
- * useFleetTicker. Components read from this hook; they never touch mock
- * data or the ticker directly.
- *
- * Phase 6: internals swap to:
- *   - Initial data: GET /fleet?plantId  (Aurora master + DynamoDB status)
- *   - Live updates: polling GET /fleet/status?plantId every 10s
- * The returned interface stays identical.
+ * Phase 6: fetches truck data from the API via useFleetTicker polling.
+ * Maps API response to the Truck type and computes status aggregations.
+ * The returned interface stays identical to Phase 3.
  */
 
 import { useMemo } from 'react';
 import { usePlant } from '@/context/PlantContext';
-import { trucks as allTrucks } from '@/mocks';
-import type { Truck } from '@/mocks/types';
+import type { Truck } from '@/types/domain';
 import type { TruckStatus } from '@/theme/statusColors';
 import { useFleetTicker } from '@/features/fleet/useFleetTicker';
 
@@ -29,40 +23,40 @@ export interface UseFleetReturn {
 export function useFleet(): UseFleetReturn {
   const { selectedPlant } = usePlant();
 
-  // Filter to selected plant
-  const plantTrucks = useMemo(
-    () => allTrucks.filter((t) => t.plantId === selectedPlant.plantId),
-    [selectedPlant.plantId]
-  );
-
-  // Build initial status map from mock data
-  const initialStatuses = useMemo(
-    () =>
-      plantTrucks.reduce<Record<string, TruckStatus>>(
-        (acc, t) => ({ ...acc, [t.truckId]: t.currentStatus }),
-        {}
-      ),
-    [plantTrucks]
-  );
-
-  const plantTruckIds = useMemo(
-    () => plantTrucks.map((t) => t.truckId),
-    [plantTrucks]
-  );
-
-  const { statuses, secondsUntilNext } = useFleetTicker({
-    initialStatuses,
-    plantTruckIds,
+  const { trucks: apiTrucks, secondsUntilNext, loading, error } = useFleetTicker({
+    plantId: selectedPlant.plantId,
   });
 
-  // Merge live statuses into truck master data
-  const trucksWithLiveStatus = useMemo<Truck[]>(
+  // Map API response to the Truck type expected by components.
+  // The DynamoDB fleet response may lack some master-data fields that
+  // the mock data had (driver details, VIN, etc). Fill defaults.
+  const trucks = useMemo<Truck[]>(
     () =>
-      plantTrucks.map((t) => ({
-        ...t,
-        currentStatus: statuses[t.truckId] ?? t.currentStatus,
+      apiTrucks.map((t) => ({
+        truckId: t.truckId,
+        truckNumber: t.truckNumber ?? t.truckId,
+        plantId: t.plantId,
+        type: (t.type ?? 'rear_discharge') as Truck['type'],
+        capacity: t.capacity ?? 12,
+        year: t.year ?? 2022,
+        make: t.make ?? '',
+        model: t.model ?? '',
+        vin: t.vin ?? '',
+        driver: {
+          driverId: t.driverId ?? '',
+          name: t.driverName ?? '',
+          phone: '',
+          certifications: [],
+        },
+        currentStatus: t.currentStatus,
+        currentJobSite: t.currentJobSite ?? undefined,
+        currentOrderId: t.currentOrderId ?? undefined,
+        lastWashout: t.lastUpdated ?? new Date().toISOString(),
+        loadsToday: t.loadsToday ?? 0,
+        latitude: t.latitude ?? undefined,
+        longitude: t.longitude ?? undefined,
       })),
-    [plantTrucks, statuses]
+    [apiTrucks]
   );
 
   // Pre-aggregate status counts for the bar chart
@@ -76,18 +70,18 @@ export function useFleet(): UseFleetReturn {
         returning:   0,
         maintenance: 0,
       };
-      trucksWithLiveStatus.forEach((t) => {
+      trucks.forEach((t) => {
         counts[t.currentStatus] = (counts[t.currentStatus] ?? 0) + 1;
       });
       return counts;
     },
-    [trucksWithLiveStatus]
+    [trucks]
   );
 
   return {
-    trucks: trucksWithLiveStatus,
-    loading: false,
-    error: null,
+    trucks,
+    loading,
+    error,
     secondsUntilNext,
     statusCounts,
   };

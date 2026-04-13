@@ -23,7 +23,7 @@ import {
   type GetRowIdParams,
 } from 'ag-grid-community';
 import { Box, Typography, Stack } from '@mui/material';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 import { StatusChip } from '@/components/StatusChip';
 import type { OrderStatus } from '@/theme/statusColors';
 import { columnDefs, buildPinnedBottomRow, STATUS_DISPLAY_ORDER } from './columnDefs';

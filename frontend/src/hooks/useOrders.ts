@@ -1,15 +1,15 @@
 /**
  * useOrders — data hook for the Dispatch Board.
  *
- * Phase 2: returns mock data filtered by the selected plant and date.
- * Phase 6: the internals swap to real API calls; the returned interface
- *           stays identical so no component code changes.
+ * Phase 6: fetches from the real API via the api client.
+ * The returned interface is identical to Phase 2 so no
+ * component code changes are required.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { usePlant } from '@/context/PlantContext';
-import { orders as mockOrders } from '@/mocks';
-import type { Order } from '@/mocks/types';
+import { api } from '@/api/client';
+import type { Order } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 import dayjs from 'dayjs';
 
@@ -37,9 +37,9 @@ export interface UseOrdersReturn {
   error: string | null;
   selectedDate: string;          // ISO date string "YYYY-MM-DD"
   setSelectedDate: (d: string) => void;
-  createOrder: (draft: NewOrderDraft) => Order;
-  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string) => void;
-  assignTruck: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => void;
+  createOrder: (draft: NewOrderDraft) => Promise<Order>;
+  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string) => Promise<void>;
+  assignTruck: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
 }
 
 // Everything the caller must supply to create a new order
@@ -67,87 +67,104 @@ export function useOrders(): UseOrdersReturn {
   const [selectedDate, setSelectedDate] = useState<string>(
     dayjs().format('YYYY-MM-DD')
   );
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // In Phase 2 we hold a local copy of the mock orders in state so
-  // creates/updates are reflected in the UI immediately.
-  const [localOrders, setLocalOrders] = useState<Order[]>(() => mockOrders);
+  // Fetch orders when plant or date changes
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-  // Filter by plant + date
-  const orders = useMemo<Order[]>(() => {
-    return localOrders.filter((o) => {
-      const matchesPlant = o.plantId === selectedPlant.plantId;
-      const orderDate = dayjs(o.requestedTime).format('YYYY-MM-DD');
-      const matchesDate = orderDate === selectedDate;
-      return matchesPlant && matchesDate;
-    });
-  }, [localOrders, selectedPlant.plantId, selectedDate]);
+    api.get<{ orders: Order[]; count: number }>('/orders', {
+      plantId: selectedPlant.plantId,
+      date: selectedDate,
+    })
+      .then((data) => {
+        if (!cancelled) setOrders(data.orders);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message ?? 'Failed to load orders');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedPlant.plantId, selectedDate]);
 
   // ── createOrder ─────────────────────────────────────────────────────────────
-  const createOrder = useCallback((draft: NewOrderDraft): Order => {
-    const now = new Date().toISOString();
-    const ticketNumber = `TKT-${Date.now().toString().slice(-6)}`;
-
-    const newOrder: Order = {
-      ticketNumber,
-      plantId: selectedPlant.plantId,
-      status: 'pending',
-      events: [{ timestamp: now, eventType: 'pending', note: 'Order created' }],
-      createdAt: now,
-      updatedAt: now,
+  const createOrder = useCallback(async (draft: NewOrderDraft): Promise<Order> => {
+    const body = {
       ...draft,
+      plantId: selectedPlant.plantId,
     };
 
-    setLocalOrders((prev) => [...prev, newOrder]);
+    const newOrder = await api.post<Order>('/orders', body);
+    setOrders((prev) => [...prev, newOrder]);
     return newOrder;
   }, [selectedPlant.plantId]);
 
   // ── updateOrderStatus ────────────────────────────────────────────────────────
-  const updateOrderStatus = useCallback((
+  const updateOrderStatus = useCallback(async (
     ticketNumber: string,
     newStatus: OrderStatus,
     note?: string,
   ) => {
-    setLocalOrders((prev) =>
-      prev.map((o) => {
-        if (o.ticketNumber !== ticketNumber) return o;
-        if (!canTransition(o.status, newStatus)) {
-          console.warn(`Invalid transition: ${o.status} → ${newStatus}`);
-          return o;
-        }
-        const now = new Date().toISOString();
-        return {
-          ...o,
-          status: newStatus,
-          updatedAt: now,
-          events: [
-            ...o.events,
-            { timestamp: now, eventType: newStatus, note },
-          ],
-        };
-      })
-    );
-  }, []);
+    // Optimistic validation
+    const existing = orders.find((o) => o.ticketNumber === ticketNumber);
+    if (existing && !canTransition(existing.status, newStatus)) {
+      console.warn(`Invalid transition: ${existing.status} → ${newStatus}`);
+      return;
+    }
+
+    try {
+      const updated = await api.patch<Order>(`/orders/${ticketNumber}`, {
+        plantId: selectedPlant.plantId,
+        date: selectedDate,
+        status: newStatus,
+        note,
+      });
+
+      setOrders((prev) =>
+        prev.map((o) => (o.ticketNumber === ticketNumber ? updated : o))
+      );
+    } catch (err: unknown) {
+      const apiErr = err as { status?: number; message?: string };
+      setError(apiErr.message ?? 'Failed to update order status');
+    }
+  }, [orders, selectedPlant.plantId, selectedDate]);
 
   // ── assignTruck ──────────────────────────────────────────────────────────────
-  const assignTruck = useCallback((
+  const assignTruck = useCallback(async (
     ticketNumber: string,
     truckId: string,
     truckNumber: string,
     driverName: string,
   ) => {
-    setLocalOrders((prev) =>
-      prev.map((o) =>
-        o.ticketNumber === ticketNumber
-          ? { ...o, assignedTruckId: truckId, assignedTruckNumber: truckNumber, driverName }
-          : o
-      )
-    );
-  }, []);
+    try {
+      const updated = await api.patch<Order>(`/orders/${ticketNumber}`, {
+        plantId: selectedPlant.plantId,
+        date: selectedDate,
+        assignedTruckId: truckId,
+        assignedTruckNumber: truckNumber,
+        driverName,
+      });
+
+      setOrders((prev) =>
+        prev.map((o) => (o.ticketNumber === ticketNumber ? updated : o))
+      );
+    } catch (err: unknown) {
+      const apiErr = err as { status?: number; message?: string };
+      setError(apiErr.message ?? 'Failed to assign truck');
+    }
+  }, [selectedPlant.plantId, selectedDate]);
 
   return {
     orders,
-    loading: false,   // Phase 6: set true during fetch
-    error: null,      // Phase 6: set on fetch failure
+    loading,
+    error,
     selectedDate,
     setSelectedDate,
     createOrder,

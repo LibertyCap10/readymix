@@ -221,6 +221,15 @@ CREATE TABLE plant_mix_designs (
     PRIMARY KEY (plant_id, mix_design_id)
 );
 
+-- Recommended applications (pour types) for each mix design
+CREATE TABLE mix_design_applications (
+    mix_design_id   UUID NOT NULL REFERENCES mix_designs(id) ON DELETE CASCADE,
+    pour_type       pour_type NOT NULL,
+    PRIMARY KEY (mix_design_id, pour_type)
+);
+
+CREATE INDEX idx_mda_pour_type ON mix_design_applications (pour_type);
+
 -- ────────────────────────────────────────────────────────────
 -- TRUCKS (MASTER DATA)
 -- ────────────────────────────────────────────────────────────
@@ -567,23 +576,52 @@ INSERT INTO ingredients (id, name, category, unit, cost_per_unit) VALUES
     ('e1000000-0000-0000-0000-000000000004', 'Water', 'water', 'gallons', 0.004),
     ('e1000000-0000-0000-0000-000000000005', 'Class C Fly Ash', 'fly_ash', 'lbs', 0.035),
     ('e1000000-0000-0000-0000-000000000006', '#89 Pea Gravel', 'aggregate', 'lbs', 0.014),
-    ('e1000000-0000-0000-0000-000000000007', 'Fiber Reinforcement (synthetic)', 'fiber', 'lbs', 1.200);
+    ('e1000000-0000-0000-0000-000000000007', 'Fiber Reinforcement (synthetic)', 'fiber', 'lbs', 1.200),
+    ('e1000000-0000-0000-0000-000000000008', 'Type III Portland Cement', 'cement', 'lbs', 0.078),
+    ('e1000000-0000-0000-0000-000000000009', '#67 Granite Aggregate', 'aggregate', 'lbs', 0.016),
+    ('e1000000-0000-0000-0000-000000000010', 'Silica Fume', 'pozzolan', 'lbs', 0.320),
+    ('e1000000-0000-0000-0000-000000000011', 'GGBFS (Slag Cement)', 'pozzolan', 'lbs', 0.045),
+    ('e1000000-0000-0000-0000-000000000012', '#4 Coarse Aggregate', 'aggregate', 'lbs', 0.011),
+    ('e1000000-0000-0000-0000-000000000013', 'Manufactured Sand (FM 3.0)', 'sand', 'lbs', 0.009),
+    ('e1000000-0000-0000-0000-000000000014', 'Lightweight Aggregate (expanded shale)', 'aggregate', 'lbs', 0.045),
+    ('e1000000-0000-0000-0000-000000000015', 'Class F Fly Ash', 'fly_ash', 'lbs', 0.032),
+    ('e1000000-0000-0000-0000-000000000016', 'Steel Fiber (hooked-end)', 'fiber', 'lbs', 0.950);
 
 -- Admixtures
 INSERT INTO admixtures (id, name, type, unit, cost_per_unit) VALUES
     ('ad000000-0000-0000-0000-000000000001', 'Pozzolith 322N', 'water_reducer', 'oz', 0.12),
     ('ad000000-0000-0000-0000-000000000002', 'Micro Air', 'air_entrainer', 'oz', 0.18),
     ('ad000000-0000-0000-0000-000000000003', 'Pozzolith NC534', 'accelerator', 'oz', 0.22),
-    ('ad000000-0000-0000-0000-000000000004', 'Pozz-Retard', 'retarder', 'oz', 0.15);
+    ('ad000000-0000-0000-0000-000000000004', 'Pozz-Retard', 'retarder', 'oz', 0.15),
+    ('ad000000-0000-0000-0000-000000000005', 'ADVA 140M', 'water_reducer', 'oz', 0.28),
+    ('ad000000-0000-0000-0000-000000000006', 'Daratard 17', 'retarder', 'oz', 0.17),
+    ('ad000000-0000-0000-0000-000000000007', 'RheoTEC Z-60', 'water_reducer', 'oz', 0.35),
+    ('ad000000-0000-0000-0000-000000000008', 'Eclipse Floor', 'water_reducer', 'oz', 0.42);
 
 -- Mix Designs
-INSERT INTO mix_designs (id, code, name, psi_rating, slump_min, slump_max, yield_per_batch, cost_per_yard) VALUES
-    ('f1000000-0000-0000-0000-000000000001', '3000PSI-STD', '3000 PSI Standard', 3000, 3, 5, 9.0, 95.00),
-    ('f1000000-0000-0000-0000-000000000002', '4000PSI-STD', '4000 PSI Standard', 4000, 3, 6, 9.0, 115.00),
-    ('f1000000-0000-0000-0000-000000000003', '5000PSI-HE', '5000 PSI High-Early', 5000, 3, 5, 8.5, 145.00),
-    ('f1000000-0000-0000-0000-000000000004', '4000PSI-FBR', '4000 PSI Fiber-Reinforced', 4000, 3, 5, 9.0, 135.00);
+INSERT INTO mix_designs (id, code, name, psi_rating, slump_min, slump_max, description, yield_per_batch, cost_per_yard) VALUES
+    ('f1000000-0000-0000-0000-000000000001', '3000PSI-STD', '3000 PSI Standard',          3000, 3, 5, 'General-purpose residential mix. Suitable for sidewalks, driveways, and light-duty slabs where high strength is not critical.', 9.0, 95.00),
+    ('f1000000-0000-0000-0000-000000000002', '4000PSI-STD', '4000 PSI Standard',          4000, 3, 6, 'Workhorse commercial/residential mix. Meets code for most structural slabs, walls, and footings. Good balance of strength and workability.', 9.0, 115.00),
+    ('f1000000-0000-0000-0000-000000000003', '5000PSI-HE',  '5000 PSI High-Early',        5000, 3, 5, 'High-early-strength mix using Type III cement and accelerator. Reaches 3000 PSI in 24 hours for fast form stripping on columns and structural pours.', 8.5, 145.00),
+    ('f1000000-0000-0000-0000-000000000004', '4000PSI-FBR', '4000 PSI Fiber-Reinforced',  4000, 3, 5, 'Standard 4000 PSI with synthetic macro-fiber to control plastic shrinkage cracking. Ideal for large flatwork pours like parking lots and warehouse slabs.', 9.0, 135.00),
+    ('f1000000-0000-0000-0000-000000000005', '3500PSI-AIR', '3500 PSI Air-Entrained',     3500, 4, 6, 'Freeze-thaw resistant mix with 5-7% entrained air. Required for all exterior flatwork in cold climates — driveways, sidewalks, patios, and exposed slabs.', 9.0, 105.00),
+    ('f1000000-0000-0000-0000-000000000006', '6000PSI-HP',  '6000 PSI High-Performance',  6000, 2, 4, 'High-performance structural mix with silica fume and high-range water reducer. Designed for columns, shear walls, and transfer beams in high-rise construction.', 8.0, 185.00),
+    ('f1000000-0000-0000-0000-000000000007', '4500PSI-SLG', '4500 PSI Slag Blend',        4500, 4, 7, 'Sustainable mix replacing 40% cement with slag (GGBFS). Lower heat of hydration — preferred for mass pours like mat foundations and thick grade beams.', 9.0, 120.00),
+    ('f1000000-0000-0000-0000-000000000008', '3000PSI-EC',  '3000 PSI Economy',           3000, 4, 8, 'High-slump economy mix for non-structural fill, mud slabs, and lean concrete. Maximum workability at minimum cost.', 9.5, 78.00),
+    ('f1000000-0000-0000-0000-000000000009', '4000PSI-PMP', '4000 PSI Pumpable',          4000, 5, 8, 'Designed for pump placement with fine aggregate ratio optimized for pumpability. Used for elevated slabs, walls, and any pour requiring a boom pump.', 9.0, 125.00),
+    ('f1000000-0000-0000-0000-000000000010', '5000PSI-FBR', '5000 PSI Steel-Fiber',       5000, 3, 5, 'Heavy-duty industrial mix with hooked-end steel fibers for impact and fatigue resistance. Engineered for warehouse floors, loading docks, and heavy equipment pads.', 8.5, 175.00);
 
--- Mix Design Ingredients (4000 PSI Standard, per cubic yard)
+-- Mix Design Ingredients (per cubic yard)
+
+-- 3000 PSI Standard: lower cement, more aggregate
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000001', 470, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000002', 1900, 'lbs'),  -- aggregate
+    ('f1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000003', 1300, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000004', 34, 'gallons'),-- water
+    ('f1000000-0000-0000-0000-000000000001', 'e1000000-0000-0000-0000-000000000005', 80, 'lbs');    -- fly ash
+
+-- 4000 PSI Standard
 INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
     ('f1000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000001', 564, 'lbs'),   -- cement
     ('f1000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000002', 1800, 'lbs'),  -- aggregate
@@ -591,20 +629,195 @@ INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit
     ('f1000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000004', 32, 'gallons'),-- water
     ('f1000000-0000-0000-0000-000000000002', 'e1000000-0000-0000-0000-000000000005', 100, 'lbs');   -- fly ash
 
--- Mix Design Admixtures (4000 PSI Standard)
+-- 5000 PSI High-Early: more cement, less water, accelerator admixture
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-000000000001', 660, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-000000000002', 1750, 'lbs'),  -- aggregate
+    ('f1000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-000000000003', 1100, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-000000000004', 28, 'gallons'),-- water (lower w/c ratio)
+    ('f1000000-0000-0000-0000-000000000003', 'e1000000-0000-0000-0000-000000000005', 120, 'lbs');   -- fly ash
+
+-- 4000 PSI Fiber-Reinforced: same as 4000 STD + pea gravel + synthetic fiber
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000001', 564, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000006', 900, 'lbs'),   -- pea gravel (replaces some aggregate)
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000002', 900, 'lbs'),   -- aggregate
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000003', 1200, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000004', 32, 'gallons'),-- water
+    ('f1000000-0000-0000-0000-000000000004', 'e1000000-0000-0000-0000-000000000007', 1.5, 'lbs');   -- synthetic fiber
+
+-- 3500 PSI Air-Entrained: standard residential with air entrainment for freeze-thaw
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000005', 'e1000000-0000-0000-0000-000000000001', 510, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000005', 'e1000000-0000-0000-0000-000000000002', 1850, 'lbs'),  -- limestone aggregate
+    ('f1000000-0000-0000-0000-000000000005', 'e1000000-0000-0000-0000-000000000003', 1250, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000005', 'e1000000-0000-0000-0000-000000000004', 33, 'gallons'),-- water
+    ('f1000000-0000-0000-0000-000000000005', 'e1000000-0000-0000-0000-000000000005', 90, 'lbs');    -- fly ash
+
+-- 6000 PSI High-Performance: silica fume + granite + low w/c ratio
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000006', 'e1000000-0000-0000-0000-000000000001', 750, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000006', 'e1000000-0000-0000-0000-000000000009', 1700, 'lbs'),  -- granite aggregate
+    ('f1000000-0000-0000-0000-000000000006', 'e1000000-0000-0000-0000-000000000013', 1050, 'lbs'),  -- manufactured sand
+    ('f1000000-0000-0000-0000-000000000006', 'e1000000-0000-0000-0000-000000000004', 25, 'gallons'),-- water (very low w/c)
+    ('f1000000-0000-0000-0000-000000000006', 'e1000000-0000-0000-0000-000000000010', 50, 'lbs');    -- silica fume
+
+-- 4500 PSI Slag Blend: GGBFS replaces 40% of cement
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000007', 'e1000000-0000-0000-0000-000000000001', 340, 'lbs'),   -- cement (reduced)
+    ('f1000000-0000-0000-0000-000000000007', 'e1000000-0000-0000-0000-000000000011', 225, 'lbs'),   -- slag cement (GGBFS)
+    ('f1000000-0000-0000-0000-000000000007', 'e1000000-0000-0000-0000-000000000002', 1800, 'lbs'),  -- limestone aggregate
+    ('f1000000-0000-0000-0000-000000000007', 'e1000000-0000-0000-0000-000000000003', 1200, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000007', 'e1000000-0000-0000-0000-000000000004', 31, 'gallons');-- water
+
+-- 3000 PSI Economy: lean mix, high slump, max workability
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000008', 'e1000000-0000-0000-0000-000000000001', 420, 'lbs'),   -- cement (low)
+    ('f1000000-0000-0000-0000-000000000008', 'e1000000-0000-0000-0000-000000000002', 1950, 'lbs'),  -- limestone aggregate
+    ('f1000000-0000-0000-0000-000000000008', 'e1000000-0000-0000-0000-000000000003', 1400, 'lbs'),  -- sand
+    ('f1000000-0000-0000-0000-000000000008', 'e1000000-0000-0000-0000-000000000004', 37, 'gallons'),-- water (high)
+    ('f1000000-0000-0000-0000-000000000008', 'e1000000-0000-0000-0000-000000000015', 100, 'lbs');   -- Class F fly ash
+
+-- 4000 PSI Pumpable: fine sand ratio tuned for pump placement
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000001', 560, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000006', 600, 'lbs'),   -- pea gravel (improves pumpability)
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000002', 1200, 'lbs'),  -- limestone aggregate
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000003', 1350, 'lbs'),  -- sand (high ratio)
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000004', 33, 'gallons'),-- water
+    ('f1000000-0000-0000-0000-000000000009', 'e1000000-0000-0000-0000-000000000005', 90, 'lbs');    -- fly ash
+
+-- 5000 PSI Steel-Fiber: industrial-grade with hooked steel fibers
+INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000001', 650, 'lbs'),   -- cement
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000009', 1750, 'lbs'),  -- granite aggregate
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000013', 1100, 'lbs'),  -- manufactured sand
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000004', 28, 'gallons'),-- water
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000005', 110, 'lbs'),   -- fly ash
+    ('f1000000-0000-0000-0000-000000000010', 'e1000000-0000-0000-0000-000000000016', 33, 'lbs');    -- steel fiber (~ 25 lbs/yd³)
+
+-- Mix Design Admixtures
+
+-- 3000 PSI Standard: water reducer only
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000001', 'ad000000-0000-0000-0000-000000000001', 2.5, 'oz');    -- water reducer
+
+-- 4000 PSI Standard: water reducer + air entrainer
 INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
     ('f1000000-0000-0000-0000-000000000002', 'ad000000-0000-0000-0000-000000000001', 3.0, 'oz'),    -- water reducer
     ('f1000000-0000-0000-0000-000000000002', 'ad000000-0000-0000-0000-000000000002', 1.0, 'oz');    -- air entrainer
 
+-- 5000 PSI High-Early: water reducer + accelerator (high-early strength)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000003', 'ad000000-0000-0000-0000-000000000001', 4.0, 'oz'),    -- water reducer (higher dose)
+    ('f1000000-0000-0000-0000-000000000003', 'ad000000-0000-0000-0000-000000000003', 6.0, 'oz');    -- accelerator
+
+-- 4000 PSI Fiber-Reinforced: water reducer + air entrainer + retarder (fiber needs workability time)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000004', 'ad000000-0000-0000-0000-000000000001', 3.5, 'oz'),    -- water reducer
+    ('f1000000-0000-0000-0000-000000000004', 'ad000000-0000-0000-0000-000000000002', 1.0, 'oz'),    -- air entrainer
+    ('f1000000-0000-0000-0000-000000000004', 'ad000000-0000-0000-0000-000000000004', 2.0, 'oz');    -- retarder
+
+-- 3500 PSI Air-Entrained: water reducer + air entrainer (freeze-thaw critical)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000005', 'ad000000-0000-0000-0000-000000000001', 3.0, 'oz'),    -- water reducer
+    ('f1000000-0000-0000-0000-000000000005', 'ad000000-0000-0000-0000-000000000002', 1.5, 'oz');    -- air entrainer (higher dose for 6% target)
+
+-- 6000 PSI High-Performance: high-range water reducer (superplasticizer) for low w/c
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000006', 'ad000000-0000-0000-0000-000000000005', 8.0, 'oz'),    -- ADVA 140M (high-range WR)
+    ('f1000000-0000-0000-0000-000000000006', 'ad000000-0000-0000-0000-000000000006', 3.0, 'oz');    -- retarder (extended working time for tall pours)
+
+-- 4500 PSI Slag Blend: water reducer + retarder (slag sets slowly, retarder for hot weather)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000007', 'ad000000-0000-0000-0000-000000000001', 3.0, 'oz'),    -- water reducer
+    ('f1000000-0000-0000-0000-000000000007', 'ad000000-0000-0000-0000-000000000006', 2.0, 'oz');    -- retarder
+
+-- 3000 PSI Economy: water reducer only (keep it simple and cheap)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000008', 'ad000000-0000-0000-0000-000000000001', 2.0, 'oz');    -- water reducer (low dose)
+
+-- 4000 PSI Pumpable: high-range WR + retarder (workability window for pump setup)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000009', 'ad000000-0000-0000-0000-000000000005', 5.0, 'oz'),    -- ADVA 140M (flowability)
+    ('f1000000-0000-0000-0000-000000000009', 'ad000000-0000-0000-0000-000000000006', 2.5, 'oz'),    -- retarder
+    ('f1000000-0000-0000-0000-000000000009', 'ad000000-0000-0000-0000-000000000007', 4.0, 'oz');    -- RheoTEC (viscosity modifier for pumpability)
+
+-- 5000 PSI Steel-Fiber: high-range WR + air entrainer + retarder (steel fiber reduces workability)
+INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit) VALUES
+    ('f1000000-0000-0000-0000-000000000010', 'ad000000-0000-0000-0000-000000000005', 6.0, 'oz'),    -- ADVA 140M
+    ('f1000000-0000-0000-0000-000000000010', 'ad000000-0000-0000-0000-000000000002', 0.8, 'oz'),    -- air entrainer
+    ('f1000000-0000-0000-0000-000000000010', 'ad000000-0000-0000-0000-000000000004', 2.5, 'oz');    -- retarder (extended working time)
+
 -- Plant mix design availability
+-- Riverside (Plant 1): full-service plant, stocks all 10 mixes
 INSERT INTO plant_mix_designs (plant_id, mix_design_id) VALUES
     ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000001'),
     ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000002'),
     ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000003'),
     ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000004'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000005'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000006'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000007'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000008'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000009'),
+    ('a1000000-0000-0000-0000-000000000001', 'f1000000-0000-0000-0000-000000000010'),
+    -- Northside (Plant 2): residential-focused, stocks 7 mixes (no HP, no steel-fiber, no pumpable)
     ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000001'),
     ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000002'),
-    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000003');
+    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000003'),
+    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000004'),
+    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000005'),
+    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000007'),
+    ('a1000000-0000-0000-0000-000000000002', 'f1000000-0000-0000-0000-000000000008');
+
+-- Mix design recommended applications
+INSERT INTO mix_design_applications (mix_design_id, pour_type) VALUES
+    -- 3000 PSI Standard: lighter residential flatwork
+    ('f1000000-0000-0000-0000-000000000001', 'driveway'),
+    ('f1000000-0000-0000-0000-000000000001', 'sidewalk'),
+    ('f1000000-0000-0000-0000-000000000001', 'slab'),
+    -- 4000 PSI Standard: general commercial/residential structural
+    ('f1000000-0000-0000-0000-000000000002', 'driveway'),
+    ('f1000000-0000-0000-0000-000000000002', 'slab'),
+    ('f1000000-0000-0000-0000-000000000002', 'wall'),
+    ('f1000000-0000-0000-0000-000000000002', 'footing'),
+    ('f1000000-0000-0000-0000-000000000002', 'foundation'),
+    -- 5000 PSI High-Early: structural, fast form stripping
+    ('f1000000-0000-0000-0000-000000000003', 'foundation'),
+    ('f1000000-0000-0000-0000-000000000003', 'column'),
+    ('f1000000-0000-0000-0000-000000000003', 'grade_beam'),
+    ('f1000000-0000-0000-0000-000000000003', 'footing'),
+    ('f1000000-0000-0000-0000-000000000003', 'wall'),
+    -- 4000 PSI Fiber-Reinforced: crack-resistant flatwork and parking
+    ('f1000000-0000-0000-0000-000000000004', 'driveway'),
+    ('f1000000-0000-0000-0000-000000000004', 'sidewalk'),
+    ('f1000000-0000-0000-0000-000000000004', 'slab'),
+    -- 3500 PSI Air-Entrained: exterior work in freeze-thaw climates
+    ('f1000000-0000-0000-0000-000000000005', 'driveway'),
+    ('f1000000-0000-0000-0000-000000000005', 'sidewalk'),
+    ('f1000000-0000-0000-0000-000000000005', 'slab'),
+    -- 6000 PSI High-Performance: high-rise structural elements
+    ('f1000000-0000-0000-0000-000000000006', 'column'),
+    ('f1000000-0000-0000-0000-000000000006', 'wall'),
+    ('f1000000-0000-0000-0000-000000000006', 'foundation'),
+    ('f1000000-0000-0000-0000-000000000006', 'grade_beam'),
+    -- 4500 PSI Slag Blend: mass pours, sustainable option
+    ('f1000000-0000-0000-0000-000000000007', 'foundation'),
+    ('f1000000-0000-0000-0000-000000000007', 'grade_beam'),
+    ('f1000000-0000-0000-0000-000000000007', 'footing'),
+    ('f1000000-0000-0000-0000-000000000007', 'slab'),
+    -- 3000 PSI Economy: fill and non-structural
+    ('f1000000-0000-0000-0000-000000000008', 'slab'),
+    ('f1000000-0000-0000-0000-000000000008', 'footing'),
+    -- 4000 PSI Pumpable: elevated pours, boom pump placement
+    ('f1000000-0000-0000-0000-000000000009', 'slab'),
+    ('f1000000-0000-0000-0000-000000000009', 'wall'),
+    ('f1000000-0000-0000-0000-000000000009', 'column'),
+    ('f1000000-0000-0000-0000-000000000009', 'foundation'),
+    -- 5000 PSI Steel-Fiber: industrial floors and heavy-duty pads
+    ('f1000000-0000-0000-0000-000000000010', 'slab'),
+    ('f1000000-0000-0000-0000-000000000010', 'foundation');
 
 -- Trucks (master data)
 INSERT INTO trucks (id, truck_number, plant_id, make, model, year, type, drum_capacity, is_active) VALUES
@@ -644,9 +857,10 @@ INSERT INTO surcharge_rules (name, description, amount, is_percentage, applies_t
     ('Overtime Surcharge', 'Orders placed after 3 PM for same-day delivery', 15.00, true, 'overtime'),
     ('Short Load Fee', 'Orders under 3 cubic yards', 45.00, false, 'short_load');
 
--- Sample delivery history (30 days of completed orders)
--- This generates realistic historical data for the analytics dashboard.
+-- Sample delivery history (30 days back + ~2.5 weeks forward through April 24)
+-- Generates realistic historical + near-future data for analytics.
 -- In production, this table is populated by the order completion flow.
+-- ~330 records: 55 days * 6 deliveries/day = 330
 
 INSERT INTO delivery_history (
     ticket_number, customer_id, plant_id, truck_id, driver_id, mix_design_id, job_site_id,
@@ -675,7 +889,7 @@ SELECT
     base_date + (i / 6) * INTERVAL '1 day' + (6.5 + (i % 8)) * INTERVAL '1 hour',   -- completed
     prices[1 + (i % 4)],
     volumes[1 + (i % 5)] * prices[1 + (i % 4)]
-FROM generate_series(0, 179) AS s(i),
+FROM generate_series(0, 329) AS s(i),
 LATERAL (SELECT
     NOW() - INTERVAL '30 days' AS base_date,
     ARRAY['c1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000002','c1000000-0000-0000-0000-000000000003','c1000000-0000-0000-0000-000000000004','c1000000-0000-0000-0000-000000000005','c1000000-0000-0000-0000-000000000006','c1000000-0000-0000-0000-000000000007','c1000000-0000-0000-0000-000000000008','c1000000-0000-0000-0000-000000000009','c1000000-0000-0000-0000-000000000010']::UUID[] AS customer_ids,

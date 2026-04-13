@@ -62,7 +62,13 @@ export async function handler(event) {
     if (method === 'GET'   && path === '/customers/search')   return searchCustomers(event);
     if (method === 'GET'   && path === '/plants')              return listPlants(event);
     if (method === 'GET'   && path === '/mix-designs')         return listMixDesigns(event);
+    if (method === 'POST'  && path === '/mix-designs')         return createMixDesign(event);
     if (method === 'GET'   && path === '/customers/{customerId}/job-sites') return listJobSites(event);
+    if (method === 'GET'   && path === '/mix-designs/{mixDesignId}')      return getMixDesign(event);
+    if (method === 'PATCH' && path === '/mix-designs/{mixDesignId}')      return updateMixDesign(event);
+    if (method === 'PATCH' && path === '/mix-designs/{mixDesignId}/status') return toggleMixDesignStatus(event);
+    if (method === 'GET'   && path === '/ingredients')         return listIngredients(event);
+    if (method === 'GET'   && path === '/admixtures')          return listAdmixtures(event);
 
     return badRequest(`Route not found: ${method} ${path}`);
   } catch (err) {
@@ -445,30 +451,55 @@ async function listPlants() {
 // ─── GET /mix-designs ────────────────────────────────────────────────────
 
 async function listMixDesigns(event) {
-  const { plantId } = getQueryParams(event);
+  const { plantId, psiMin, psiMax, pourType, includeInactive } = getQueryParams(event);
   const { query: q_, param: p_ } = await aurora();
 
   let sql = `
     SELECT
-      md.id   AS "mixDesignId",
+      md.id           AS "mixDesignId",
       md.name,
       md.code,
       md.psi_rating   AS "psi",
       md.slump_min    AS "slumpMin",
-      md.slump_max    AS "slumpMax"
+      md.slump_max    AS "slumpMax",
+      md.description,
+      md.yield_per_batch AS "yieldPerBatch",
+      md.cost_per_yard   AS "costPerYard",
+      md.is_active       AS "isActive"
     FROM mix_designs md`;
 
   const params = [];
+  const conditions = [];
 
   if (plantId) {
     sql += `
-    JOIN plant_mix_designs pmd ON pmd.mix_design_id = md.id
-    WHERE pmd.plant_id = (SELECT id FROM plants WHERE code = :plantId)
-      AND md.is_active = true`;
+    JOIN plant_mix_designs pmd ON pmd.mix_design_id = md.id`;
+    conditions.push(`pmd.plant_id = (SELECT id FROM plants WHERE code = :plantId)`);
     params.push(p_('plantId', plantId));
-  } else {
+  }
+
+  if (pourType) {
     sql += `
-    WHERE md.is_active = true`;
+    JOIN mix_design_applications mda_filter ON mda_filter.mix_design_id = md.id`;
+    conditions.push(`mda_filter.pour_type = :pourType::pour_type`);
+    params.push(p_('pourType', pourType));
+  }
+
+  if (includeInactive !== 'true') {
+    conditions.push(`md.is_active = true`);
+  }
+
+  if (psiMin) {
+    conditions.push(`md.psi_rating >= :psiMin`);
+    params.push(p_('psiMin', Number(psiMin)));
+  }
+  if (psiMax) {
+    conditions.push(`md.psi_rating <= :psiMax`);
+    params.push(p_('psiMax', Number(psiMax)));
+  }
+
+  if (conditions.length > 0) {
+    sql += `\n    WHERE ` + conditions.join(`\n      AND `);
   }
 
   sql += `
@@ -476,7 +507,26 @@ async function listMixDesigns(event) {
 
   const { rows } = await q_(sql, params);
 
-  return ok({ mixDesigns: rows });
+  // Fetch applications for all returned mix designs
+  if (rows.length > 0) {
+    const ids = rows.map(r => r.mixDesignId);
+    const { rows: appRows } = await q_(
+      `SELECT mix_design_id AS "mixDesignId", pour_type AS "pourType"
+       FROM mix_design_applications
+       WHERE mix_design_id = ANY(ARRAY[${ids.map((_, i) => `:appId${i}::UUID`).join(',')}])`,
+      ids.map((id, i) => p_(`appId${i}`, id))
+    );
+    const appMap = {};
+    for (const r of appRows) {
+      if (!appMap[r.mixDesignId]) appMap[r.mixDesignId] = [];
+      appMap[r.mixDesignId].push(r.pourType);
+    }
+    for (const row of rows) {
+      row.applications = appMap[row.mixDesignId] || [];
+    }
+  }
+
+  return ok({ mixDesigns: rows, count: rows.length });
 }
 
 // ─── GET /customers/{customerId}/job-sites ───────────────────────────────
@@ -501,4 +551,305 @@ async function listJobSites(event) {
   );
 
   return ok({ jobSites: rows });
+}
+
+// ─── GET /mix-designs/{mixDesignId} ──────────────────────────────────────
+
+async function getMixDesign(event) {
+  const { mixDesignId } = getPathParams(event);
+  if (!mixDesignId) return badRequest('mixDesignId path param is required');
+
+  const { query: q_, param: p_ } = await aurora();
+
+  // Get mix design + ingredients + admixtures + applications in parallel
+  const [designResult, ingredientsResult, admixturesResult, applicationsResult] = await Promise.all([
+    q_(
+      `SELECT id AS "mixDesignId", code, name, psi_rating AS "psi",
+              slump_min AS "slumpMin", slump_max AS "slumpMax",
+              description, yield_per_batch AS "yieldPerBatch",
+              cost_per_yard AS "costPerYard", is_active AS "isActive"
+       FROM mix_designs WHERE code = :mixDesignId`,
+      [p_('mixDesignId', mixDesignId)]
+    ),
+    q_(
+      `SELECT i.id AS "ingredientId", i.name, mdi.quantity, mdi.unit
+       FROM mix_design_ingredients mdi
+       JOIN ingredients i ON mdi.ingredient_id = i.id
+       JOIN mix_designs md ON mdi.mix_design_id = md.id
+       WHERE md.code = :mixDesignId
+       ORDER BY mdi.quantity DESC`,
+      [p_('mixDesignId', mixDesignId)]
+    ),
+    q_(
+      `SELECT a.id AS "admixtureId", a.name, a.type, mda.dosage, mda.unit
+       FROM mix_design_admixtures mda
+       JOIN admixtures a ON mda.admixture_id = a.id
+       JOIN mix_designs md ON mda.mix_design_id = md.id
+       WHERE md.code = :mixDesignId`,
+      [p_('mixDesignId', mixDesignId)]
+    ),
+    q_(
+      `SELECT mda.pour_type AS "pourType"
+       FROM mix_design_applications mda
+       JOIN mix_designs md ON mda.mix_design_id = md.id
+       WHERE md.code = :mixDesignId`,
+      [p_('mixDesignId', mixDesignId)]
+    ),
+  ]);
+
+  if (designResult.rows.length === 0) return notFound(`Mix design ${mixDesignId} not found`);
+
+  return ok({
+    ...designResult.rows[0],
+    ingredients: ingredientsResult.rows,
+    admixtures: admixturesResult.rows,
+    applications: applicationsResult.rows.map(r => r.pourType),
+  });
+}
+
+// ─── POST /mix-designs ──────────────────────────────────────────────────
+
+async function createMixDesign(event) {
+  const body = parseBody(event);
+  const { query: q_, param: p_, transaction: tx_ } = await aurora();
+
+  const required = ['code', 'name', 'psi', 'slumpMin', 'slumpMax'];
+  const missing = required.filter(f => body[f] == null || body[f] === '');
+  if (missing.length > 0) return badRequest(`Missing: ${missing.join(', ')}`);
+
+  if (body.psi <= 0) return badRequest('psi must be > 0');
+  if (body.slumpMin >= body.slumpMax) return badRequest('slumpMin must be less than slumpMax');
+  if (!body.ingredients || body.ingredients.length === 0) return badRequest('At least one ingredient is required');
+
+  // Check for duplicate code
+  const existing = await q_(`SELECT id FROM mix_designs WHERE code = :code`, [p_('code', body.code)]);
+  if (existing.rows.length > 0) return conflict(`Mix design code "${body.code}" already exists`);
+
+  const statements = [];
+
+  // 1. Insert mix design
+  statements.push({
+    sql: `INSERT INTO mix_designs (code, name, psi_rating, slump_min, slump_max, description, yield_per_batch, cost_per_yard)
+          VALUES (:code, :name, :psi, :slumpMin, :slumpMax, :description, :yieldPerBatch, :costPerYard)
+          RETURNING id`,
+    parameters: [
+      p_('code', body.code),
+      p_('name', body.name),
+      p_('psi', Number(body.psi)),
+      p_('slumpMin', Number(body.slumpMin)),
+      p_('slumpMax', Number(body.slumpMax)),
+      p_('description', body.description || null),
+      p_('yieldPerBatch', body.yieldPerBatch ? Number(body.yieldPerBatch) : null),
+      p_('costPerYard', body.costPerYard ? Number(body.costPerYard) : null),
+    ],
+  });
+
+  const results = await tx_(statements);
+  const mixDesignId = results[0].rows[0].id;
+
+  // 2. Insert ingredients, admixtures, applications, and plant link in a second transaction
+  const childStatements = [];
+
+  for (const ing of body.ingredients) {
+    childStatements.push({
+      sql: `INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit)
+            VALUES (:mixId::UUID, :ingId::UUID, :qty, :unit)`,
+      parameters: [
+        p_('mixId', mixDesignId),
+        p_('ingId', ing.ingredientId),
+        p_('qty', Number(ing.quantity)),
+        p_('unit', ing.unit),
+      ],
+    });
+  }
+
+  if (body.admixtures) {
+    for (const adm of body.admixtures) {
+      childStatements.push({
+        sql: `INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit)
+              VALUES (:mixId::UUID, :admId::UUID, :dosage, :unit)`,
+        parameters: [
+          p_('mixId', mixDesignId),
+          p_('admId', adm.admixtureId),
+          p_('dosage', Number(adm.dosage)),
+          p_('unit', adm.unit || 'oz'),
+        ],
+      });
+    }
+  }
+
+  if (body.applications) {
+    for (const pourType of body.applications) {
+      childStatements.push({
+        sql: `INSERT INTO mix_design_applications (mix_design_id, pour_type)
+              VALUES (:mixId::UUID, :pourType::pour_type)`,
+        parameters: [
+          p_('mixId', mixDesignId),
+          p_('pourType', pourType),
+        ],
+      });
+    }
+  }
+
+  if (body.plantId) {
+    childStatements.push({
+      sql: `INSERT INTO plant_mix_designs (plant_id, mix_design_id)
+            VALUES ((SELECT id FROM plants WHERE code = :plantId), :mixId::UUID)`,
+      parameters: [
+        p_('plantId', body.plantId),
+        p_('mixId', mixDesignId),
+      ],
+    });
+  }
+
+  if (childStatements.length > 0) {
+    await tx_(childStatements);
+  }
+
+  return created({
+    mixDesignId,
+    code: body.code,
+    name: body.name,
+    psi: Number(body.psi),
+  });
+}
+
+// ─── PATCH /mix-designs/{mixDesignId} ───────────────────────────────────
+
+async function updateMixDesign(event) {
+  const { mixDesignId } = getPathParams(event);
+  if (!mixDesignId) return badRequest('mixDesignId path param is required');
+
+  const body = parseBody(event);
+  const { query: q_, param: p_, transaction: tx_ } = await aurora();
+
+  // Resolve the internal UUID from the code
+  const { rows } = await q_(`SELECT id FROM mix_designs WHERE code = :code`, [p_('code', mixDesignId)]);
+  if (rows.length === 0) return notFound(`Mix design ${mixDesignId} not found`);
+  const id = rows[0].id;
+
+  const statements = [];
+
+  // Build SET clause dynamically for provided fields
+  const updates = [];
+  const params = [p_('id', id)];
+  if (body.name !== undefined) { updates.push('name = :name'); params.push(p_('name', body.name)); }
+  if (body.psi !== undefined) { updates.push('psi_rating = :psi'); params.push(p_('psi', Number(body.psi))); }
+  if (body.slumpMin !== undefined) { updates.push('slump_min = :slumpMin'); params.push(p_('slumpMin', Number(body.slumpMin))); }
+  if (body.slumpMax !== undefined) { updates.push('slump_max = :slumpMax'); params.push(p_('slumpMax', Number(body.slumpMax))); }
+  if (body.description !== undefined) { updates.push('description = :description'); params.push(p_('description', body.description)); }
+  if (body.yieldPerBatch !== undefined) { updates.push('yield_per_batch = :yieldPerBatch'); params.push(p_('yieldPerBatch', Number(body.yieldPerBatch))); }
+  if (body.costPerYard !== undefined) { updates.push('cost_per_yard = :costPerYard'); params.push(p_('costPerYard', Number(body.costPerYard))); }
+
+  if (updates.length > 0) {
+    updates.push('updated_at = NOW()');
+    statements.push({
+      sql: `UPDATE mix_designs SET ${updates.join(', ')} WHERE id = :id::UUID`,
+      parameters: params,
+    });
+  }
+
+  // Replace ingredients if provided
+  if (body.ingredients) {
+    statements.push({
+      sql: `DELETE FROM mix_design_ingredients WHERE mix_design_id = :id::UUID`,
+      parameters: [p_('id', id)],
+    });
+    for (const ing of body.ingredients) {
+      statements.push({
+        sql: `INSERT INTO mix_design_ingredients (mix_design_id, ingredient_id, quantity, unit)
+              VALUES (:mixId::UUID, :ingId::UUID, :qty, :unit)`,
+        parameters: [
+          p_('mixId', id),
+          p_('ingId', ing.ingredientId),
+          p_('qty', Number(ing.quantity)),
+          p_('unit', ing.unit),
+        ],
+      });
+    }
+  }
+
+  // Replace admixtures if provided
+  if (body.admixtures) {
+    statements.push({
+      sql: `DELETE FROM mix_design_admixtures WHERE mix_design_id = :id::UUID`,
+      parameters: [p_('id', id)],
+    });
+    for (const adm of body.admixtures) {
+      statements.push({
+        sql: `INSERT INTO mix_design_admixtures (mix_design_id, admixture_id, dosage, unit)
+              VALUES (:mixId::UUID, :admId::UUID, :dosage, :unit)`,
+        parameters: [
+          p_('mixId', id),
+          p_('admId', adm.admixtureId),
+          p_('dosage', Number(adm.dosage)),
+          p_('unit', adm.unit || 'oz'),
+        ],
+      });
+    }
+  }
+
+  // Replace applications if provided
+  if (body.applications) {
+    statements.push({
+      sql: `DELETE FROM mix_design_applications WHERE mix_design_id = :id::UUID`,
+      parameters: [p_('id', id)],
+    });
+    for (const pourType of body.applications) {
+      statements.push({
+        sql: `INSERT INTO mix_design_applications (mix_design_id, pour_type)
+              VALUES (:mixId::UUID, :pourType::pour_type)`,
+        parameters: [
+          p_('mixId', id),
+          p_('pourType', pourType),
+        ],
+      });
+    }
+  }
+
+  if (statements.length === 0) return badRequest('No fields to update');
+
+  await tx_(statements);
+  return ok({ updated: true, mixDesignId });
+}
+
+// ─── PATCH /mix-designs/{mixDesignId}/status ────────────────────────────
+
+async function toggleMixDesignStatus(event) {
+  const { mixDesignId } = getPathParams(event);
+  if (!mixDesignId) return badRequest('mixDesignId path param is required');
+
+  const body = parseBody(event);
+  if (body.isActive === undefined) return badRequest('isActive is required');
+
+  const { query: q_, param: p_ } = await aurora();
+  const { rowCount } = await q_(
+    `UPDATE mix_designs SET is_active = :isActive, updated_at = NOW() WHERE code = :code`,
+    [p_('isActive', body.isActive), p_('code', mixDesignId)]
+  );
+
+  if (rowCount === 0) return notFound(`Mix design ${mixDesignId} not found`);
+  return ok({ updated: true, isActive: body.isActive });
+}
+
+// ─── GET /ingredients ───────────────────────────────────────────────────
+
+async function listIngredients(event) {
+  const { query: q_ } = await aurora();
+  const { rows } = await q_(
+    `SELECT id AS "ingredientId", name, category, unit, cost_per_unit AS "costPerUnit"
+     FROM ingredients WHERE is_active = true ORDER BY category, name`
+  );
+  return ok({ ingredients: rows });
+}
+
+// ─── GET /admixtures ────────────────────────────────────────────────────
+
+async function listAdmixtures(event) {
+  const { query: q_ } = await aurora();
+  const { rows } = await q_(
+    `SELECT id AS "admixtureId", name, type, unit, cost_per_unit AS "costPerUnit"
+     FROM admixtures WHERE is_active = true ORDER BY type, name`
+  );
+  return ok({ admixtures: rows });
 }

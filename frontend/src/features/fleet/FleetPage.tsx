@@ -16,7 +16,8 @@
  * A countdown badge shows "Next update in Xs" so users know it's live.
  */
 
-import { Box, Grid2, Paper, Typography } from '@mui/material';
+import { Alert, Box, CircularProgress, Grid2, Paper, Typography, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import CircleIcon from '@mui/icons-material/Circle';
 import { usePlant } from '@/context/PlantContext';
 import { useFleet } from '@/hooks/useFleet';
@@ -63,9 +64,12 @@ function ChartCard({ title, subtitle, children, height = 260 }: ChartCardProps) 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function FleetPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { selectedPlant } = usePlant();
-  const { trucks, statusCounts, secondsUntilNext } = useFleet();
-  const { cycleTimePoints, utilizationSegments, utilizationPct } = useAnalytics();
+  const { trucks, statusCounts, secondsUntilNext, loading: fleetLoading, error: fleetError } = useFleet();
+  const { cycleTimePoints, utilizationSegments, utilizationPct, loading: analyticsLoading } = useAnalytics();
+  const loading = fleetLoading || analyticsLoading;
 
   const activeTrucks = trucks.filter((t) => t.currentStatus !== 'maintenance').length;
   const maintenanceTrucks = trucks.filter((t) => t.currentStatus === 'maintenance').length;
@@ -76,11 +80,11 @@ export function FleetPage() {
       {/* ── Page header ──────────────────────────────────────────────── */}
       <Box
         sx={{
-          px: 2.5,
-          py: 1.5,
+          px: { xs: 1.5, md: 2.5 },
+          py: 1,
           display: 'flex',
           alignItems: 'center',
-          gap: 2,
+          gap: { xs: 1, md: 2 },
           borderBottom: '1px solid',
           borderColor: 'divider',
           flexShrink: 0,
@@ -105,8 +109,20 @@ export function FleetPage() {
         </Box>
       </Box>
 
+      {/* ── Error banner ───────────────────────────────────────────── */}
+      {fleetError && (
+        <Alert severity="error" sx={{ mx: 2, mt: 1 }}>
+          {fleetError}
+        </Alert>
+      )}
+
       {/* ── Scrollable content ────────────────────────────────────────── */}
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
 
         {/* ── Charts row ────────────────────────────────────────────── */}
         <Grid2 container spacing={2} sx={{ mb: 2 }}>
@@ -114,6 +130,7 @@ export function FleetPage() {
             <ChartCard
               title="Fleet Status"
               subtitle="Current truck assignments"
+              height={isMobile ? 180 : 260}
             >
               <FleetStatusChart statusCounts={statusCounts} />
             </ChartCard>
@@ -123,6 +140,7 @@ export function FleetPage() {
             <ChartCard
               title="Avg Cycle Time"
               subtitle="Last 7 days · 90 min target"
+              height={isMobile ? 180 : 260}
             >
               <CycleTimeChart data={cycleTimePoints} />
             </ChartCard>
@@ -132,6 +150,7 @@ export function FleetPage() {
             <ChartCard
               title="Fleet Utilization"
               subtitle="This week"
+              height={isMobile ? 180 : 260}
             >
               <UtilizationChart
                 segments={utilizationSegments}
@@ -154,7 +173,7 @@ export function FleetPage() {
           <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
             <Typography variant="subtitle2" fontWeight={700}>Truck Roster</Typography>
           </Box>
-          <Box sx={{ height: 320 }}>
+          <Box sx={{ height: isMobile ? 240 : 320 }}>
             <TruckRoster trucks={trucks} />
           </Box>
         </Paper>

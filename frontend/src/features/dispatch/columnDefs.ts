@@ -11,7 +11,7 @@ import { StatusCellRenderer } from './cellRenderers/StatusCellRenderer';
 import { TruckAssignmentRenderer } from './cellRenderers/TruckAssignmentRenderer';
 import { TimeCellRenderer } from './cellRenderers/TimeCellRenderer';
 import { HotLoadRenderer } from './cellRenderers/HotLoadRenderer';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 
 /** Operational order for status sections (most urgent first). */
 export const STATUS_DISPLAY_ORDER = [

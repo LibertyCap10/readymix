@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import type { Plant } from '../mocks/types';
-import { plants } from '../mocks/plants';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import type { Plant } from '@/types/domain';
+import { api } from '@/api/client';
 
 interface PlantContextValue {
   selectedPlant: Plant;
@@ -12,30 +12,47 @@ const PlantContext = createContext<PlantContextValue | null>(null);
 
 const STORAGE_KEY = 'readymix-selected-plant';
 
-function getInitialPlant(): Plant {
+function getStoredPlant(): Plant | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Plant;
-      const match = plants.find((p) => p.plantId === parsed.plantId);
-      if (match) return match;
-    }
+    if (stored) return JSON.parse(stored) as Plant;
   } catch {
     // ignore malformed storage
   }
-  return plants[0];
+  return null;
 }
 
 export function PlantProvider({ children }: { children: ReactNode }) {
-  const [selectedPlant, setSelectedPlantState] = useState<Plant>(getInitialPlant);
+  const [allPlants, setAllPlants] = useState<Plant[]>([]);
+  const [selectedPlant, setSelectedPlantState] = useState<Plant | null>(null);
+
+  // Fetch plants from API on mount
+  useEffect(() => {
+    api.get<{ plants: Plant[] }>('/plants')
+      .then((data) => {
+        const plants = data.plants;
+        setAllPlants(plants);
+
+        // Restore selection from localStorage, falling back to first plant
+        const stored = getStoredPlant();
+        const match = stored ? plants.find((p) => p.plantId === stored.plantId) : null;
+        setSelectedPlantState(match ?? plants[0] ?? null);
+      })
+      .catch((err) => {
+        console.error('Failed to load plants:', err);
+      });
+  }, []);
 
   const setSelectedPlant = useCallback((plant: Plant) => {
     setSelectedPlantState(plant);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plant));
   }, []);
 
+  // Don't render children until we have at least one plant
+  if (!selectedPlant) return null;
+
   return (
-    <PlantContext.Provider value={{ selectedPlant, setSelectedPlant, allPlants: plants }}>
+    <PlantContext.Provider value={{ selectedPlant, setSelectedPlant, allPlants }}>
       {children}
     </PlantContext.Provider>
   );

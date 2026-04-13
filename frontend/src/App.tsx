@@ -1,21 +1,20 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './AppLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { DispatchPage } from './features/dispatch/DispatchPage';
 import { FleetPage } from './features/fleet/FleetPage';
-
-// Placeholder — replaced in a future phase
-function AnalyticsPage() {
-  return <div style={{ padding: 24 }}><h2>Analytics</h2><p>Coming in a future phase — volume, utilization, cycle times</p></div>;
-}
+import { AnalyticsPage } from './features/analytics/AnalyticsPage';
+import { MixesPage } from './features/mixes/MixesPage';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/dispatch" element={<DispatchPage />} />
-          <Route path="/fleet" element={<FleetPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/dispatch" element={<ErrorBoundary><DispatchPage /></ErrorBoundary>} />
+          <Route path="/mixes" element={<ErrorBoundary><MixesPage /></ErrorBoundary>} />
+          <Route path="/fleet" element={<ErrorBoundary><FleetPage /></ErrorBoundary>} />
+          <Route path="/analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
           <Route path="*" element={<Navigate to="/dispatch" replace />} />
         </Route>
       </Routes>

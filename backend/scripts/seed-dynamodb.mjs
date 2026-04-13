@@ -439,6 +439,108 @@ function makeOrders() {
   });
 }
 
+// ─── Generate orders for a date range ────────────────────────────────────
+// Creates varied orders for each day from startDate to endDate (inclusive).
+// Reuses the order templates but with different dates and unique ticket numbers.
+
+function makeOrdersForRange(startDate, endDate) {
+  const CUSTOMERS = [
+    { id: 'CUST-001', name: 'Hill Country Builders', siteId: 'SITE-001', siteName: 'Lakewood Estates Phase 2', siteAddr: '800 Lakewood Dr, Austin, TX' },
+    { id: 'CUST-002', name: 'Lone Star Commercial', siteId: 'SITE-002', siteName: 'Domain Tower III', siteAddr: '11500 Domain Dr, Austin, TX' },
+    { id: 'CUST-003', name: 'Mueller Development Group', siteId: 'SITE-003', siteName: 'Mueller Mixed-Use Development', siteAddr: '4715 Airport Blvd, Austin, TX' },
+    { id: 'CUST-004', name: 'Capital City Infrastructure', siteId: 'SITE-005', siteName: 'I-35 Expansion Project', siteAddr: 'US-183 & I-35, Austin, TX' },
+    { id: 'CUST-005', name: 'Travis County Roads', siteId: 'SITE-007', siteName: 'FM 969 Bridge Repair', siteAddr: 'FM 969 & Colorado River, TX' },
+    { id: 'CUST-006', name: 'Round Rock Commercial', siteId: 'SITE-010', siteName: 'Kalahari Resort Expansion', siteAddr: '3001 Kalahari Blvd, Round Rock, TX' },
+    { id: 'CUST-007', name: 'Pflugerville Independent SD', siteId: 'SITE-015', siteName: 'Pflugerville Town Center', siteAddr: '100 Town Center Dr, Pflugerville, TX' },
+  ];
+
+  const MIXES = [
+    { id: 'MIX-3000-LS', name: '3000 PSI Limestone', psi: 3000 },
+    { id: 'MIX-4000-LS', name: '4000 PSI Limestone', psi: 4000 },
+    { id: 'MIX-5000-GR', name: '5000 PSI Granite', psi: 5000 },
+    { id: 'MIX-4000-AE', name: '4000 PSI Air-Entrained', psi: 4000 },
+  ];
+
+  const POUR_TYPES = ['foundation', 'slab', 'wall', 'driveway', 'sidewalk', 'column', 'footing', 'grade_beam'];
+  const STATUSES = ['pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete'];
+  const TRUCKS_P1 = [
+    { id: 'TRUCK-101', num: '101', driver: 'Jesse Ramirez' },
+    { id: 'TRUCK-102', num: '102', driver: 'Maria Santos' },
+    { id: 'TRUCK-103', num: '103', driver: 'Darnell Washington' },
+    { id: 'TRUCK-104', num: '104', driver: 'Travis Nguyen' },
+  ];
+  const TRUCKS_P2 = [
+    { id: 'TRUCK-201', num: '201', driver: 'Bobby Fischer' },
+    { id: 'TRUCK-202', num: '202', driver: 'Angela Brooks' },
+    { id: 'TRUCK-203', num: '203', driver: 'Luis Ortega' },
+  ];
+
+  const allOrders = [];
+  let ticketCounter = 5000;
+
+  const start = new Date(startDate + 'T00:00:00Z');
+  const end   = new Date(endDate + 'T00:00:00Z');
+
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const dateStr = d.toISOString().slice(0, 10);
+    const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6;
+    const ordersPerDay = isWeekend ? 4 : 8; // fewer on weekends
+
+    for (let i = 0; i < ordersPerDay; i++) {
+      const cust = CUSTOMERS[i % CUSTOMERS.length];
+      const mix  = MIXES[i % MIXES.length];
+      const isPlant2 = i >= 5;
+      const plant = isPlant2 ? 'PLANT-002' : 'PLANT-001';
+      const trucks = isPlant2 ? TRUCKS_P2 : TRUCKS_P1;
+      const truck = trucks[i % trucks.length];
+      const volume = [4, 6, 8, 9, 10, 12][i % 6];
+      const slump = [4, 5, 5, 6][i % 4];
+      const pourType = POUR_TYPES[i % POUR_TYPES.length];
+      const isHotLoad = i % 7 === 0;
+      const hour = 7 + i;
+      const status = STATUSES[i % STATUSES.length];
+      const ticketNumber = `TKT-2026-${String(ticketCounter++).padStart(4, '0')}`;
+
+      // Build events up to the current status
+      const events = [{ timestamp: `${dateStr}T${String(hour - 2).padStart(2, '0')}:00:00Z`, eventType: 'pending', note: 'Order created' }];
+      const statusOrder = ['pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete'];
+      const statusIdx = statusOrder.indexOf(status);
+      for (let s = 1; s <= statusIdx; s++) {
+        events.push({ timestamp: `${dateStr}T${String(hour - 2 + s).padStart(2, '0')}:${15 * s}:00Z`, eventType: statusOrder[s] });
+      }
+
+      const order = {
+        plantId: plant,
+        ticketNumber,
+        customerId: cust.id, customerName: cust.name,
+        jobSiteId: cust.siteId, jobSiteName: cust.siteName, jobSiteAddress: cust.siteAddr,
+        mixDesignId: mix.id, mixDesignName: mix.name, psi: mix.psi,
+        volume, slump, pourType,
+        requestedTime: `${dateStr}T${String(hour).padStart(2, '0')}:00:00Z`,
+        status, isHotLoad,
+        events,
+      };
+
+      // Assign truck for non-pending orders
+      if (statusIdx >= 1) {
+        order.assignedTruckId = truck.id;
+        order.assignedTruckNumber = truck.num;
+        order.driverName = truck.driver;
+      }
+
+      const orderDateStr = order.requestedTime.slice(0, 10);
+      allOrders.push({
+        ...order,
+        orderDateTicket: `${orderDateStr}#${ticketNumber}`,
+        createdAt: events[0].timestamp,
+        updatedAt: events.at(-1).timestamp,
+      });
+    }
+  }
+
+  return allOrders;
+}
+
 // ─── Batch write helper ───────────────────────────────────────────────────
 
 /**
@@ -514,15 +616,24 @@ async function main() {
   await batchWrite(TABLES.trucks, TRUCKS);
   console.log(`   ✓ Trucks seeded`);
 
-  // Seed Orders
-  const orders = makeOrders();
-  console.log(`📋 Seeding ${orders.length} orders → ${TABLES.orders} (date: ${TODAY})`);
-  await batchWrite(TABLES.orders, orders);
-  console.log(`   ✓ Orders seeded`);
+  // Seed today's detailed orders (with realistic statuses and events)
+  const todayOrders = makeOrders();
+  console.log(`📋 Seeding ${todayOrders.length} detailed orders for today (${TODAY}) → ${TABLES.orders}`);
+  await batchWrite(TABLES.orders, todayOrders);
+  console.log(`   ✓ Today's orders seeded`);
+
+  // Seed orders for April 8-24 range
+  const rangeOrders = makeOrdersForRange('2026-04-08', '2026-04-24');
+  // Filter out today's orders (already seeded with detailed data above)
+  const futureOrders = rangeOrders.filter(o => o.requestedTime.slice(0, 10) !== TODAY);
+  console.log(`📋 Seeding ${futureOrders.length} orders for Apr 8-24 → ${TABLES.orders}`);
+  await batchWrite(TABLES.orders, futureOrders);
+  console.log(`   ✓ Range orders seeded`);
 
   console.log('\n✅ Seed complete!\n');
   console.log('Test the API:');
   console.log(`  curl "<API_URL>/orders?plantId=PLANT-001&date=${TODAY}"`);
+  console.log(`  curl "<API_URL>/orders?plantId=PLANT-001&date=2026-04-15"`);
   console.log(`  curl "<API_URL>/fleet?plantId=PLANT-001"`);
   console.log('');
 }

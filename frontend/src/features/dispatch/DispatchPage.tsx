@@ -16,9 +16,11 @@
 
 import { useState, useCallback } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Stack,
   Typography,
   useMediaQuery,
@@ -33,7 +35,7 @@ import { DispatchGrid } from './DispatchGrid';
 import { MobileOrderList } from './MobileOrderList';
 import { OrderDetailDrawer } from '@/components/OrderDetailDrawer';
 import { NewOrderDialog } from './NewOrderDialog';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 import { orderStatusColors } from '@/theme/statusColors';
 
@@ -60,6 +62,8 @@ export function DispatchPage() {
 
   const {
     orders,
+    loading,
+    error,
     selectedDate,
     setSelectedDate,
     createOrder,
@@ -101,9 +105,8 @@ export function DispatchPage() {
   }, []);
 
   const handleNewOrderSubmit = useCallback(
-    (draft: Parameters<typeof createOrder>[0]) => {
-      const order = createOrder(draft);
-      // Immediately show the new order in the drawer
+    async (draft: Parameters<typeof createOrder>[0]) => {
+      const order = await createOrder(draft);
       setSelectedOrder(order);
       setDrawerOpen(true);
     },
@@ -118,97 +121,104 @@ export function DispatchPage() {
       <Paper
         elevation={0}
         sx={{
-          px: 2,
-          py: 1.5,
+          px: { xs: 1, sm: 2 },
+          py: 1,
           borderBottom: '1px solid',
           borderColor: 'divider',
           flexShrink: 0,
         }}
       >
+        {/* Row 1: Date picker + stats + New Order button */}
         <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          alignItems={{ xs: 'stretch', sm: 'center' }}
-          spacing={1.5}
-          flexWrap="wrap"
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{ mb: 0.75 }}
         >
-          {/* Date picker */}
           <DatePicker
             value={dayjs(selectedDate)}
             onChange={handleDateChange}
             slotProps={{
               textField: {
                 size: 'small',
-                sx: { width: 170 },
+                sx: { width: { xs: 140, sm: 170 } },
               },
             }}
           />
 
-          {/* Summary stats */}
-          <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-            {orders.length} orders ·{' '}
-            {orders.reduce((s, o) => s + o.volume, 0).toFixed(1)} yd³
+          <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+            {orders.length} orders · {orders.reduce((s, o) => s + o.volume, 0).toFixed(1)} yd³
           </Typography>
 
-          {/* Spacer on desktop */}
-          <Box sx={{ flex: 1, display: { xs: 'none', sm: 'block' } }} />
+          <Box sx={{ flex: 1 }} />
 
-          {/* Status filter chips — scroll horizontally on mobile */}
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 0.75,
-              overflowX: 'auto',
-              pb: 0.5,
-              flexShrink: 0,
-              // Hide scrollbar visually but keep it functional
-              '&::-webkit-scrollbar': { display: 'none' },
-            }}
-          >
-            {FILTER_OPTIONS.map(({ value, label }) => {
-              const count = value === 'all' ? orders.length : (countByStatus[value] ?? 0);
-              const isActive = statusFilter === value;
-              const colors = value !== 'all' ? orderStatusColors[value as OrderStatus] : undefined;
-
-              return (
-                <Chip
-                  key={value}
-                  label={`${label}${count > 0 ? ` (${count})` : ''}`}
-                  onClick={() => setStatusFilter(value)}
-                  size="small"
-                  sx={{
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    fontWeight: isActive ? 700 : 400,
-                    bgcolor: isActive ? (colors?.background ?? 'primary.main') : 'transparent',
-                    color: isActive ? (colors?.text ?? 'primary.contrastText') : 'text.secondary',
-                    border: '1px solid',
-                    borderColor: isActive ? (colors?.text ?? 'primary.main') : 'divider',
-                    '&:hover': {
-                      bgcolor: colors?.background ?? 'action.hover',
-                    },
-                  }}
-                />
-              );
-            })}
-          </Box>
-
-          {/* New Order button */}
           <Button
             variant="contained"
             color="secondary"
-            startIcon={<AddIcon />}
+            startIcon={isMobile ? undefined : <AddIcon />}
             size="small"
             onClick={handleNewOrder}
-            sx={{ flexShrink: 0, fontWeight: 600 }}
+            sx={{ flexShrink: 0, fontWeight: 600, minWidth: 'auto', px: { xs: 1.5, sm: 2 } }}
           >
-            New Order
+            {isMobile ? <AddIcon /> : 'New Order'}
           </Button>
         </Stack>
+
+        {/* Row 2: Status filter chips — horizontally scrollable */}
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 0.5,
+            overflowX: 'auto',
+            pb: 0.25,
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {FILTER_OPTIONS.map(({ value, label }) => {
+            const count = value === 'all' ? orders.length : (countByStatus[value] ?? 0);
+            const isActive = statusFilter === value;
+            const colors = value !== 'all' ? orderStatusColors[value as OrderStatus] : undefined;
+
+            return (
+              <Chip
+                key={value}
+                label={`${label}${count > 0 ? ` (${count})` : ''}`}
+                onClick={() => setStatusFilter(value)}
+                size="small"
+                sx={{
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  fontWeight: isActive ? 700 : 400,
+                  fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                  height: { xs: 26, sm: 32 },
+                  bgcolor: isActive ? (colors?.background ?? 'primary.main') : 'transparent',
+                  color: isActive ? (colors?.text ?? 'primary.contrastText') : 'text.secondary',
+                  border: '1px solid',
+                  borderColor: isActive ? (colors?.text ?? 'primary.main') : 'divider',
+                  '&:hover': {
+                    bgcolor: colors?.background ?? 'action.hover',
+                  },
+                }}
+              />
+            );
+          })}
+        </Box>
       </Paper>
+
+      {/* ── Error banner ───────────────────────────────────────────── */}
+      {error && (
+        <Alert severity="error" sx={{ mx: 2, mt: 1 }} onClose={() => {}}>
+          {error}
+        </Alert>
+      )}
 
       {/* ── Grid / Card list ──────────────────────────────────────────── */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: isMobile ? 'auto' : 'hidden' }}>
-        {filteredOrders.length === 0 ? (
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : filteredOrders.length === 0 ? (
           <Box sx={{ py: 8, textAlign: 'center' }}>
             <Typography color="text.secondary" variant="body1">
               No {statusFilter !== 'all' ? statusFilter.replace('_', ' ') + ' ' : ''}orders

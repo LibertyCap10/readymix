@@ -6,7 +6,7 @@
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { Chip } from '@mui/material';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 
 export function HotLoadRenderer(props: CustomCellRendererProps<Order>) {
   if (!props.data?.isHotLoad) return null;

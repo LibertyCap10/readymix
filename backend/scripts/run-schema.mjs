@@ -1,25 +1,12 @@
 /**
- * Run Aurora PostgreSQL Schema
+ * Run Aurora PostgreSQL Schema via RDS Data API
  *
- * Reads database/schema.sql and executes each statement against Aurora
- * via the RDS Data API. Designed for idempotent reruns — continues on
- * errors (e.g., "already exists").
+ * Splits schema.sql into individual statements and executes each one.
+ * Handles PL/pgSQL blocks ($$..$$), parenthesized blocks (CREATE TABLE),
+ * and inline comments.
  *
  * Usage:
- *   AURORA_CLUSTER_ARN="arn:..." \
- *   AURORA_SECRET_ARN="arn:..." \
- *   node run-schema.mjs
- *
- * Or, if you've already deployed the SAM stack:
- *   export AURORA_CLUSTER_ARN=$(aws cloudformation describe-stacks \
- *     --stack-name readymix-dashboard-dev \
- *     --query "Stacks[0].Outputs[?OutputKey=='AuroraClusterArn'].OutputValue" \
- *     --output text)
- *   export AURORA_SECRET_ARN=$(aws cloudformation describe-stacks \
- *     --stack-name readymix-dashboard-dev \
- *     --query "Stacks[0].Outputs[?OutputKey=='AuroraSecretArn'].OutputValue" \
- *     --output text)
- *   node run-schema.mjs
+ *   AURORA_CLUSTER_ARN="arn:..." AURORA_SECRET_ARN="arn:..." node run-schema.mjs
  */
 
 import { readFileSync } from 'fs';
@@ -54,17 +41,96 @@ async function runSQL(sql) {
   }));
 }
 
+/**
+ * Split a SQL file into individual statements.
+ * Respects:
+ *   - $$ delimited PL/pgSQL blocks
+ *   - Parenthesized blocks (CREATE TABLE columns)
+ *   - Single-line comments (--)
+ *   - String literals ('...')
+ */
+function splitStatements(sql) {
+  const statements = [];
+  let current = '';
+  let i = 0;
+  let inDollarQuote = false;
+  let parenDepth = 0;
+
+  while (i < sql.length) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+
+    // $$ dollar quoting toggle
+    if (ch === '$' && next === '$') {
+      current += '$$';
+      i += 2;
+      inDollarQuote = !inDollarQuote;
+      continue;
+    }
+
+    // Inside $$ block — consume everything
+    if (inDollarQuote) {
+      current += ch;
+      i++;
+      continue;
+    }
+
+    // Single-line comment
+    if (ch === '-' && next === '-') {
+      // Consume to end of line
+      let j = i;
+      while (j < sql.length && sql[j] !== '\n') j++;
+      current += sql.slice(i, j);
+      i = j;
+      continue;
+    }
+
+    // String literal
+    if (ch === "'") {
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === "'" && sql[j + 1] === "'") { j += 2; continue; }
+        if (sql[j] === "'") { j++; break; }
+        j++;
+      }
+      current += sql.slice(i, j);
+      i = j;
+      continue;
+    }
+
+    // Track parentheses depth
+    if (ch === '(') { parenDepth++; current += ch; i++; continue; }
+    if (ch === ')') { parenDepth--; current += ch; i++; continue; }
+
+    // Semicolon at top level = end of statement
+    if (ch === ';' && parenDepth === 0) {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        statements.push(trimmed);
+      }
+      current = '';
+      i++;
+      continue;
+    }
+
+    current += ch;
+    i++;
+  }
+
+  // Remaining text
+  const trimmed = current.trim();
+  if (trimmed.length > 0 && !trimmed.split('\n').every(l => l.trim().startsWith('--') || l.trim() === '')) {
+    statements.push(trimmed);
+  }
+
+  return statements;
+}
+
 async function runSchema() {
   const schemaPath = resolve(__dirname, '../../database/schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
 
-  // Split on semicolons that are followed by SQL keywords or end-of-file.
-  // This avoids splitting inside PL/pgSQL function bodies which contain
-  // internal semicolons (e.g., the compute_cycle_time() trigger function).
-  const statements = schema
-    .split(/;(?=\s*(?:--|CREATE|INSERT|ALTER|DROP|DO|GRANT|REVOKE|SELECT|\s*$))/i)
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith('--'));
+  const statements = splitStatements(schema);
 
   console.log(`Found ${statements.length} SQL statements to execute.\n`);
 

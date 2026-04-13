@@ -6,7 +6,7 @@
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { Box, Typography, Chip } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import type { Order } from '@/mocks/types';
+import type { Order } from '@/types/domain';
 
 export function TruckAssignmentRenderer(props: CustomCellRendererProps<Order>) {
   const order = props.data;
