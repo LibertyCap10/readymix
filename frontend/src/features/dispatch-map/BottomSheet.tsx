@@ -14,8 +14,10 @@ import {
   Typography,
 } from '@mui/material';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { StatusChip } from '@/components/StatusChip';
 import type { Order } from '@/types/domain';
+import { getOrderDisplayTime } from '@/utils/orderTime';
 
 interface BottomSheetProps {
   orders: Order[];
@@ -106,6 +108,17 @@ export function BottomSheet({ orders, onOrderSelect }: BottomSheetProps) {
                     <Typography variant="caption" color="text.secondary">
                       {order.customerName} -- {order.jobSiteName} -- {order.volume} yd{'\u00b3'}
                     </Typography>
+                    {(order.status === 'pending' || order.status === 'scheduled') && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                        <AccessTimeIcon sx={{ fontSize: 11, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+                          {(() => {
+                            const dt = getOrderDisplayTime(order);
+                            return `${dt.label}: ${dt.time}`;
+                          })()}
+                        </Typography>
+                      </Box>
+                    )}
                   </CardContent>
                 </CardActionArea>
               </Card>

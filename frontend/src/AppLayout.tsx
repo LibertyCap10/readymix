@@ -41,7 +41,11 @@ export default function AppLayout() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <AppBar position="sticky">
         <Toolbar sx={{ gap: 1, minHeight: { xs: 48, md: 64 } }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: { xs: '1rem', md: '1.25rem' } }}>
+          <Typography
+            variant="h6"
+            onClick={() => navigate('/')}
+            sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: { xs: '1rem', md: '1.25rem' }, cursor: 'pointer' }}
+          >
             ReadyMix
           </Typography>
 

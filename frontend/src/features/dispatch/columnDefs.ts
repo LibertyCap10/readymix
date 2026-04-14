@@ -103,8 +103,8 @@ export const columnDefs: ColDef<Order>[] = [
   },
   {
     field: 'requestedTime',
-    headerName: 'Req. Time',
-    width: 110,
+    headerName: 'Time',
+    width: 130,
     cellRenderer: TimeCellRenderer,
     // No sort: 'asc' — buildGridRows already sorts orders by requestedTime
     // within each status group. A column sort would scatter the header rows.

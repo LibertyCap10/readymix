@@ -39,7 +39,7 @@ export interface UseOrdersReturn {
   selectedDate: string;          // ISO date string "YYYY-MM-DD"
   setSelectedDate: (d: string) => void;
   createOrder: (draft: NewOrderDraft) => Promise<Order>;
-  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string, routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number }, truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string }) => Promise<void>;
+  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string, routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number }, truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string }, targetTime?: string) => Promise<void>;
   assignTruck: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
   updateRequestedTime: (ticketNumber: string, newRequestedTime: string) => Promise<void>;
   deleteOrder: (ticketNumber: string) => Promise<void>;
@@ -127,6 +127,7 @@ export function useOrders(): UseOrdersReturn {
     note?: string,
     routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number },
     truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string },
+    targetTime?: string,
   ) => {
     // Optimistic validation
     const existing = orders.find((o) => o.ticketNumber === ticketNumber);
@@ -143,6 +144,7 @@ export function useOrders(): UseOrdersReturn {
         body.assignedTruckNumber = truckAssignment.assignedTruckNumber;
         body.driverName = truckAssignment.driverName;
       }
+      if (targetTime) body.targetTime = targetTime;
 
       const updated = await api.patch<Order>(
         `/orders/${ticketNumber}`,

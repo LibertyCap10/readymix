@@ -3,9 +3,13 @@
  *
  * Schedule-aware: shows all trucks sorted by availability, with estimated
  * available times for busy trucks and late arrival warnings.
+ *
+ * Includes a target-time picker that defaults to the order's requestedTime when
+ * it's in the future, or suggests a realistic future time (30 min+ out, rounded
+ * to the next 15-min increment) when the requested time has passed.
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -23,10 +27,12 @@ import {
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { truckStatusColors } from '@/theme/statusColors';
 import type { TruckStatus } from '@/theme/statusColors';
 import type { Order, Truck } from '@/types/domain';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 
 interface AssignTruckDialogProps {
   open: boolean;
@@ -34,15 +40,30 @@ interface AssignTruckDialogProps {
   order: Order | null;
   availableTrucks: Truck[];
   allTrucks: Truck[];
-  onAssign: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
+  onAssign: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string, targetTime: string) => Promise<void>;
 }
 
 interface TruckAvailability {
   truck: Truck;
   isAvailableNow: boolean;
   availableAt: string | null;     // ISO timestamp or null if available now
-  lateByMinutes: number | null;   // how many minutes late vs requested time, null if on time
+  lateByMinutes: number | null;   // how many minutes late vs target time, null if on time
   dailyOrderCount: number;        // how many orders already scheduled today
+}
+
+/** Compute a sensible default target time for dispatching. */
+function computeDefaultTarget(order: Order): Dayjs {
+  const requested = dayjs(order.requestedTime);
+  // If requested time is more than 15 min in the future, use it
+  if (requested.isAfter(dayjs().add(15, 'minute'))) {
+    return requested;
+  }
+  // Otherwise, suggest 30 min from now rounded up to next 15-min increment
+  const base = dayjs().add(30, 'minute');
+  const remainder = base.minute() % 15;
+  return remainder === 0
+    ? base.second(0).millisecond(0)
+    : base.add(15 - remainder, 'minute').second(0).millisecond(0);
 }
 
 export function AssignTruckDialog({
@@ -56,6 +77,21 @@ export function AssignTruckDialog({
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [targetTime, setTargetTime] = useState<Dayjs>(dayjs());
+
+  // Reset target time whenever order changes
+  useEffect(() => {
+    if (order) {
+      setTargetTime(computeDefaultTarget(order));
+      setSelectedTruck(null);
+      setError(null);
+    }
+  }, [order]);
+
+  const requestedInPast = useMemo(() => {
+    if (!order) return false;
+    return dayjs(order.requestedTime).isBefore(dayjs().add(15, 'minute'));
+  }, [order]);
 
   // Build schedule-aware availability list
   const truckAvailability = useMemo((): TruckAvailability[] => {
@@ -91,15 +127,13 @@ export function AssignTruckDialog({
           }
         }
 
-        // Calculate potential late arrival
+        // Calculate potential late arrival vs target time
         let lateByMinutes: number | null = null;
         if (availableAt) {
-          // Loading (7 min) + buffer (15 min) already accounted for in availableAt
-          // But transit time is unknown here, so flag if available time is after requested time
           const availMs = dayjs(availableAt).valueOf();
-          const requestedMs = dayjs(order.requestedTime).valueOf();
-          if (availMs > requestedMs) {
-            lateByMinutes = Math.round((availMs - requestedMs) / 60000);
+          const targetMs = targetTime.valueOf();
+          if (availMs > targetMs) {
+            lateByMinutes = Math.round((availMs - targetMs) / 60000);
           }
         }
 
@@ -116,7 +150,7 @@ export function AssignTruckDialog({
         // Then by truck number
         return a.truck.truckNumber.localeCompare(b.truck.truckNumber, undefined, { numeric: true });
       });
-  }, [allTrucks, order]);
+  }, [allTrucks, order, targetTime]);
 
   const handleAssign = async () => {
     if (!order || !selectedTruck) return;
@@ -128,6 +162,7 @@ export function AssignTruckDialog({
         selectedTruck.truckId,
         selectedTruck.truckNumber,
         selectedTruck.driver.name,
+        targetTime.toISOString(),
       );
       setSelectedTruck(null);
       onClose();
@@ -152,16 +187,39 @@ export function AssignTruckDialog({
             <Typography variant="caption" color="text.secondary" display="block">
               {order.customerName} -- {order.jobSiteName}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" display="block">
               {order.mixDesignName} -- {order.volume} yd{'\u00b3'} -- Requested: {dayjs(order.requestedTime).format('h:mm A')}
             </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+              <Typography variant="caption" fontWeight={600}>
+                Target:
+              </Typography>
+              <TimePicker
+                value={targetTime}
+                onChange={(val) => { if (val) setTargetTime(val); }}
+                minutesStep={15}
+                slotProps={{
+                  textField: {
+                    size: 'small',
+                    variant: 'standard',
+                    sx: { width: 120 },
+                  },
+                }}
+              />
+            </Box>
           </Box>
+        )}
+
+        {requestedInPast && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Requested time has passed — target adjusted
+          </Alert>
         )}
 
         {/* Late arrival warning for selected truck */}
         {selectedAvailability?.lateByMinutes != null && selectedAvailability.lateByMinutes > 0 && (
           <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
-            Truck will be available ~{selectedAvailability.lateByMinutes} min after requested time
+            Truck will be available ~{selectedAvailability.lateByMinutes} min after target time
           </Alert>
         )}
 

@@ -7,6 +7,7 @@ import { Box, Typography, Paper, Chip, Divider } from '@mui/material';
 import { LocalFireDepartment, AccessTime, Place } from '@mui/icons-material';
 import type { Order } from '@/types/domain';
 import dayjs from 'dayjs';
+import { getOrderDisplayTime } from '@/utils/orderTime';
 
 interface UnassignedSidebarProps {
   orders: Order[];
@@ -34,7 +35,7 @@ export function UnassignedSidebar({ orders, onOrderClick }: UnassignedSidebarPro
       <Divider />
 
       {orders
-        .sort((a, b) => dayjs(a.requestedTime).valueOf() - dayjs(b.requestedTime).valueOf())
+        .sort((a, b) => dayjs(a.targetTime ?? a.requestedTime).valueOf() - dayjs(b.targetTime ?? b.requestedTime).valueOf())
         .map((order) => (
           <Paper
             key={order.ticketNumber}
@@ -70,7 +71,7 @@ export function UnassignedSidebar({ orders, onOrderClick }: UnassignedSidebarPro
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <AccessTime sx={{ fontSize: 12, color: 'text.disabled' }} />
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
-                  {dayjs(order.requestedTime).format('h:mm A')}
+                  {getOrderDisplayTime(order).time}
                 </Typography>
               </Box>
               <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.65rem' }}>

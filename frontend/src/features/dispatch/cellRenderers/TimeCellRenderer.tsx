@@ -1,19 +1,24 @@
 /**
- * TimeCellRenderer — formats an ISO datetime string as "h:mm A" (e.g. "7:30 AM").
- * Shows the time in bold; if the delivery is overdue the time turns orange.
+ * TimeCellRenderer — shows a contextual time based on order status:
+ *   Pending   → target dispatch time (labeled "Tgt")
+ *   Scheduled → scheduled departure time (labeled "Sched")
+ *   Other     → requested time (no label prefix)
+ * Overdue times turn orange.
  */
 
 import type { CustomCellRendererProps } from 'ag-grid-react';
 import { Typography } from '@mui/material';
 import dayjs from 'dayjs';
+import { getOrderDisplayTime } from '@/utils/orderTime';
 
 export function TimeCellRenderer(props: CustomCellRendererProps) {
-  const iso = props.value as string;
-  if (!iso) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  const order = props.data;
+  if (!order?.requestedTime) return <Typography variant="body2" color="text.disabled">—</Typography>;
 
-  const dt = dayjs(iso);
-  const formatted = dt.format('h:mm A');
-  const isOverdue = dt.isBefore(dayjs()) && !['complete', 'cancelled'].includes(props.data?.status ?? '');
+  const { time, label, iso } = getOrderDisplayTime(order);
+  const isOverdue = dayjs(iso).isBefore(dayjs()) && !['complete', 'cancelled'].includes(order.status ?? '');
+
+  const prefix = label === 'Target' ? 'Tgt ' : label === 'Scheduled' ? 'Sched ' : '';
 
   return (
     <Typography
@@ -24,7 +29,12 @@ export function TimeCellRenderer(props: CustomCellRendererProps) {
         fontVariantNumeric: 'tabular-nums',
       }}
     >
-      {formatted}
+      {prefix && (
+        <Typography component="span" variant="caption" sx={{ color: 'text.secondary', mr: 0.25 }}>
+          {prefix}
+        </Typography>
+      )}
+      {time}
     </Typography>
   );
 }

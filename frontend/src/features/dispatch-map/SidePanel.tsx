@@ -18,8 +18,10 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { StatusChip } from '@/components/StatusChip';
 import type { Order } from '@/types/domain';
+import { getOrderDisplayTime } from '@/utils/orderTime';
 import type { OrderStatus } from '@/theme/statusColors';
 
 const STATUS_ORDER: OrderStatus[] = [
@@ -131,6 +133,17 @@ export function SidePanel({ orders, totalCount, isFiltered, onOrderSelect, onClo
                           <Typography variant="caption" color="text.secondary" display="block">
                             {order.jobSiteName} -- {order.volume} yd{'\u00b3'}
                           </Typography>
+                          {(order.status === 'pending' || order.status === 'scheduled') && (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                              <AccessTimeIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
+                              <Typography variant="caption" color="text.secondary">
+                                {(() => {
+                                  const dt = getOrderDisplayTime(order);
+                                  return `${dt.label}: ${dt.time}`;
+                                })()}
+                              </Typography>
+                            </Box>
+                          )}
                           {order.assignedTruckNumber && (
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                               <LocalShippingIcon sx={{ fontSize: 12, color: 'text.secondary' }} />

@@ -404,10 +404,13 @@ async function updateOrder(event) {
 
   if (body.status === 'scheduled' && body.routeData) {
     const transitMs   = body.routeData.durationSeconds * 1000;
-    const requestedMs = new Date(current.requestedTime).getTime();
+    // Use targetTime (dispatch target) if provided, else fall back to requestedTime
+    const targetMs    = body.targetTime
+      ? new Date(body.targetTime).getTime()
+      : new Date(current.requestedTime).getTime();
 
-    // Ideal departure: work backward from requestedTime
-    const idealDepartureMs = requestedMs - TIMELINE.loadingDurationMs - transitMs;
+    // Ideal departure: work backward from target time
+    const idealDepartureMs = targetMs - TIMELINE.loadingDurationMs - transitMs;
 
     // Check truck's existing schedule for the day
     let actualDepartureMs = idealDepartureMs;
@@ -473,9 +476,9 @@ async function updateOrder(event) {
 
     // Check if constrained departure causes late arrival
     const arrivalMs = new Date(timeline.transitArrivalAt).getTime();
-    if (arrivalMs > requestedMs + 5 * 60 * 1000) { // 5 min tolerance
-      const lateByMinutes = Math.round((arrivalMs - requestedMs) / 60000);
-      lateArrivalWarning = `Truck will arrive ~${lateByMinutes} min after requested time due to prior commitment`;
+    if (arrivalMs > targetMs + 5 * 60 * 1000) { // 5 min tolerance
+      const lateByMinutes = Math.round((arrivalMs - targetMs) / 60000);
+      lateArrivalWarning = `Truck will arrive ~${lateByMinutes} min after target time due to prior commitment`;
     }
 
     setClauses.push('timeline = :timeline');
@@ -495,6 +498,12 @@ async function updateOrder(event) {
     if (actualDepartureMs !== idealDepartureMs) {
       setClauses.push('constrainedDepartureAt = :cda');
       exprValues[':cda'] = departureAt;
+    }
+
+    // Persist targetTime so it can be displayed and used on re-dispatch
+    if (body.targetTime) {
+      setClauses.push('targetTime = :targetTime');
+      exprValues[':targetTime'] = body.targetTime;
     }
   }
 

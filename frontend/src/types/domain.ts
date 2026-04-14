@@ -213,6 +213,7 @@ export interface Order {
   slump: number;           // inches
   pourType: PourType;
   requestedTime: string;   // ISO datetime
+  targetTime?: string;     // ISO datetime — dispatch target (may differ from requestedTime if past)
   assignedTruckId?: string;
   assignedTruckNumber?: string;
   driverName?: string;

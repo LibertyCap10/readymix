@@ -80,7 +80,7 @@ export function DispatchMapPage() {
   }, []);
 
   const handleDoAssign = useCallback(
-    async (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => {
+    async (ticketNumber: string, truckId: string, truckNumber: string, driverName: string, targetTime: string) => {
       const route = routes[ticketNumber];
 
       // Pass route data so the backend can compute and store the delivery timeline
@@ -96,7 +96,7 @@ export function DispatchMapPage() {
         assignedTruckId: truckId,
         assignedTruckNumber: truckNumber,
         driverName,
-      });
+      }, targetTime);
 
       // Immediately refresh fleet so the truck status updates in the UI
       await refreshFleet();

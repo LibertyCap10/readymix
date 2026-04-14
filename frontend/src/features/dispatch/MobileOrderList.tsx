@@ -20,9 +20,9 @@ import {
 import PlaceIcon from '@mui/icons-material/Place';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
-import dayjs from 'dayjs';
 import type { Order } from '@/types/domain';
 import { StatusChip } from '@/components/StatusChip';
+import { getOrderDisplayTime } from '@/utils/orderTime';
 
 interface MobileOrderListProps {
   orders: Order[];
@@ -94,7 +94,10 @@ export function MobileOrderList({ orders, onOrderClick }: MobileOrderListProps) 
                 <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
                   <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                   <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {dayjs(order.requestedTime).format('h:mm A')}
+                    {(() => {
+                      const dt = getOrderDisplayTime(order);
+                      return dt.label !== 'Requested' ? `${dt.label} ${dt.time}` : dt.time;
+                    })()}
                   </Typography>
                 </Stack>
               </Box>
