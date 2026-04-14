@@ -28,6 +28,8 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import MapIcon from '@mui/icons-material/Map';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import { orderStatusColors } from '@/theme/statusColors';
 import type { OrderStatus } from '@/theme/statusColors';
 
@@ -41,6 +43,8 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'complete',   label: 'Complete' },
   { value: 'cancelled',  label: 'Cancelled' },
 ];
+
+export type DispatchViewMode = 'map' | 'schedule';
 
 interface MapToolbarProps {
   selectedDate: string;
@@ -60,6 +64,8 @@ interface MapToolbarProps {
   onClearFilters: () => void;
   filteredCount: number;
   totalCount: number;
+  viewMode?: DispatchViewMode;
+  onViewModeChange?: (mode: DispatchViewMode) => void;
 }
 
 export function MapToolbar({
@@ -80,6 +86,8 @@ export function MapToolbar({
   onClearFilters,
   filteredCount,
   totalCount,
+  viewMode = 'map',
+  onViewModeChange,
 }: MapToolbarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -144,6 +152,46 @@ export function MapToolbar({
           <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
             {filteredCount} of {totalCount}
           </Typography>
+        )}
+
+        {/* Map / Schedule view toggle */}
+        {onViewModeChange && (
+          <Stack direction="row" spacing={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+            <Tooltip title="Map view">
+              <IconButton
+                size="small"
+                onClick={() => onViewModeChange('map')}
+                sx={{
+                  borderRadius: 0,
+                  width: 32,
+                  height: 32,
+                  bgcolor: viewMode === 'map' ? 'primary.main' : 'transparent',
+                  color: viewMode === 'map' ? 'white' : 'text.secondary',
+                  '&:hover': { bgcolor: viewMode === 'map' ? 'primary.dark' : 'action.hover' },
+                }}
+              >
+                <MapIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Schedule view">
+              <IconButton
+                size="small"
+                onClick={() => onViewModeChange('schedule')}
+                sx={{
+                  borderRadius: 0,
+                  width: 32,
+                  height: 32,
+                  bgcolor: viewMode === 'schedule' ? 'primary.main' : 'transparent',
+                  color: viewMode === 'schedule' ? 'white' : 'text.secondary',
+                  borderLeft: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { bgcolor: viewMode === 'schedule' ? 'primary.dark' : 'action.hover' },
+                }}
+              >
+                <ViewTimelineIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
         )}
 
         <Box sx={{ flex: 1 }} />

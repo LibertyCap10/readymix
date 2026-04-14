@@ -28,6 +28,8 @@ import {
   UpdateCommand,
   ScanCommand,
   Tables,
+  TIMELINE,
+  computeTimeline,
 } from '/opt/nodejs/dynamo-client.mjs';
 
 export async function handler() {
@@ -225,11 +227,43 @@ async function processOrder(order, tl, plant, nowMs, nowIso) {
       truckValues[':lng'] = truckLng;
     }
 
-    // On complete, clear order association and increment loads
+    // On complete, check for next order in sequence (multi-order chaining)
     if (newStatus === 'complete') {
-      truckUpdate.push('currentOrderId = :null, currentJobSite = :null');
-      truckValues[':null'] = null;
-      trucksFreed++;
+      const nextOrder = await findNextScheduledOrder(order);
+      if (nextOrder) {
+        // Chain to next order — truck stays busy
+        truckUpdate.push('currentOrderId = :nextOid, currentJobSite = :nextJs');
+        truckValues[':nextOid'] = nextOrder.ticketNumber;
+        truckValues[':nextJs'] = nextOrder.jobSiteName;
+        truckValues[':tst'] = 'scheduled'; // override to scheduled, not available
+        // Check if the next order should immediately start (departure time passed)
+        if (nowMs >= new Date(nextOrder.timeline?.scheduledDepartureAt ?? nextOrder.constrainedDepartureAt ?? '9999').getTime()) {
+          truckValues[':tst'] = 'loading';
+          // Also advance the next order from scheduled → dispatched
+          try {
+            await ddb.send(new UpdateCommand({
+              TableName: Tables.orders,
+              Key: { plantId: nextOrder.plantId, orderDateTicket: nextOrder.orderDateTicket },
+              UpdateExpression: 'SET #st = :newSt, updatedAt = :now, events = list_append(events, :ev)',
+              ConditionExpression: '#st = :sched',
+              ExpressionAttributeNames: { '#st': 'status' },
+              ExpressionAttributeValues: {
+                ':newSt': 'dispatched', ':sched': 'scheduled', ':now': nowIso,
+                ':ev': [{ timestamp: nowIso, eventType: 'dispatched', note: 'Auto-chained from prior order completion' }],
+              },
+            }));
+          } catch (chainErr) {
+            if (chainErr.name !== 'ConditionalCheckFailedException') {
+              console.warn(`[Ticker] Failed to chain next order ${nextOrder.ticketNumber}:`, chainErr.message);
+            }
+          }
+        }
+      } else {
+        // No next order — free truck
+        truckUpdate.push('currentOrderId = :null, currentJobSite = :null');
+        truckValues[':null'] = null;
+        trucksFreed++;
+      }
     }
 
     try {
@@ -245,7 +279,63 @@ async function processOrder(order, tl, plant, nowMs, nowIso) {
     }
   }
 
+  // Update dailySchedule cache on truck after status transitions
+  if (newStatus && order.assignedTruckId && order.timeline) {
+    try {
+      const orderDate = order.orderDateTicket.split('#')[0];
+      const truckDoc = await ddb.send(new GetCommand({
+        TableName: Tables.trucks,
+        Key: { truckId: order.assignedTruckId },
+      }));
+      const ds = truckDoc.Item?.dailySchedule ?? {};
+      const blocks = ds[orderDate] ?? [];
+      const idx = blocks.findIndex(b => b.ticketNumber === order.ticketNumber);
+      if (idx >= 0) {
+        blocks[idx].status = newStatus;
+        ds[orderDate] = blocks;
+        await ddb.send(new UpdateCommand({
+          TableName: Tables.trucks,
+          Key: { truckId: order.assignedTruckId },
+          UpdateExpression: 'SET dailySchedule = :ds',
+          ExpressionAttributeValues: { ':ds': ds },
+        }));
+      }
+    } catch (cacheErr) {
+      console.warn(`[Ticker] Failed to update dailySchedule cache:`, cacheErr.message);
+    }
+  }
+
   return { transitioned, trucksFreed };
+}
+
+// ─── Find next order in a multi-order sequence ───────────────────────────
+
+async function findNextScheduledOrder(completedOrder) {
+  if (completedOrder.scheduleSequence == null || !completedOrder.assignedTruckId) return null;
+
+  const orderDate = completedOrder.orderDateTicket.split('#')[0];
+  const nextSeq = completedOrder.scheduleSequence + 1;
+
+  // Query all scheduled orders for the same plant+date
+  const result = await ddb.send(new QueryCommand({
+    TableName: Tables.orders,
+    IndexName: 'status-index',
+    KeyConditionExpression: 'plantId = :pid AND #st = :scheduled',
+    FilterExpression: 'assignedTruckId = :truckId AND scheduleSequence = :seq',
+    ExpressionAttributeNames: { '#st': 'status' },
+    ExpressionAttributeValues: {
+      ':pid': completedOrder.plantId,
+      ':scheduled': 'scheduled',
+      ':truckId': completedOrder.assignedTruckId,
+      ':seq': nextSeq,
+    },
+  }));
+
+  const candidates = (result.Items ?? []).filter(o =>
+    o.orderDateTicket.startsWith(orderDate)
+  );
+
+  return candidates[0] ?? null;
 }
 
 // ─── Query helpers ────────────────────────────────────────────────────────

@@ -96,9 +96,10 @@ export const VALID_STATUSES = Object.keys(VALID_TRANSITIONS);
 // Used by the dispatch endpoint and ticker Lambda to compute delivery phases.
 
 export const TIMELINE = {
-  loadingDurationMs:  7 * 60 * 1000,       // 7 minutes at plant
-  pourRateMsPerYard:  10 * 60 * 1000,      // 10 minutes per cubic yard
-  minPourDurationMs:  5 * 60 * 1000,       // 5 minute floor
+  loadingDurationMs:    7 * 60 * 1000,     // 7 minutes at plant
+  pourRateMsPerYard:    10 * 60 * 1000,    // 10 minutes per cubic yard
+  minPourDurationMs:    5 * 60 * 1000,     // 5 minute floor
+  bufferBetweenJobsMs:  15 * 60 * 1000,   // 15 minutes between jobs (wash, reload, pre-trip)
 };
 
 /**
@@ -129,4 +130,51 @@ export function computeTimeline(departureAt, routeDurationSeconds, volumeYards) 
     returnDepartureAt:    new Date(returnDepartureAt).toISOString(),
     returnArrivalAt:      new Date(returnArrivalAt).toISOString(),
   };
+}
+
+/**
+ * Compute a delivery timeline constrained by when the truck becomes available.
+ * Used for multi-order scheduling where a truck's departure depends on returning
+ * from a prior job + buffer time.
+ *
+ * @param {string} earliestAvailableAt - ISO timestamp when truck returns from prior job
+ * @param {number} routeDurationSeconds - Mapbox driving estimate in seconds
+ * @param {number} volumeYards - order volume in cubic yards
+ * @returns {object} timeline with all phase boundary timestamps + constrainedDepartureAt
+ */
+export function computeConstrainedTimeline(earliestAvailableAt, routeDurationSeconds, volumeYards) {
+  const availableMs = new Date(earliestAvailableAt).getTime();
+  const departureMs = availableMs + TIMELINE.bufferBetweenJobsMs;
+  const departureAt = new Date(departureMs).toISOString();
+
+  const timeline = computeTimeline(departureAt, routeDurationSeconds, volumeYards);
+  return {
+    ...timeline,
+    constrainedDepartureAt: departureAt,
+  };
+}
+
+/**
+ * Check whether a proposed schedule block conflicts with existing blocks.
+ * Blocks conflict if their [departure, returnArrival] intervals overlap.
+ *
+ * @param {Array<{scheduledDepartureAt: string, returnArrivalAt: string}>} existingBlocks
+ * @param {{scheduledDepartureAt: string, returnArrivalAt: string}} proposed
+ * @returns {{conflict: boolean, overlappingTicket?: string}} result
+ */
+export function detectScheduleConflict(existingBlocks, proposed) {
+  const pStart = new Date(proposed.scheduledDepartureAt).getTime();
+  const pEnd   = new Date(proposed.returnArrivalAt).getTime();
+
+  for (const block of existingBlocks) {
+    const bStart = new Date(block.scheduledDepartureAt).getTime();
+    const bEnd   = new Date(block.returnArrivalAt).getTime();
+
+    // Two intervals overlap if one starts before the other ends and vice versa
+    if (pStart < bEnd && pEnd > bStart) {
+      return { conflict: true, overlappingTicket: block.ticketNumber };
+    }
+  }
+
+  return { conflict: false };
 }

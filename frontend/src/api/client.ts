@@ -50,4 +50,7 @@ export const api = {
   patch<T>(path: string, body: unknown, params?: Record<string, string | number | undefined>): Promise<T> {
     return request<T>('PATCH', path + buildQuery(params ?? {}), body);
   },
+  delete<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+    return request<T>('DELETE', path + buildQuery(params ?? {}));
+  },
 };

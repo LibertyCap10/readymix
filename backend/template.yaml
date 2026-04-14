@@ -181,6 +181,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref OrdersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrucksTable
         - DynamoDBReadPolicy:
             TableName: !Ref PlantsTable
         - Statement:
@@ -217,6 +219,11 @@ Resources:
           Properties:
             Path: /orders/{ticketId}
             Method: patch
+        DeleteOrder:
+          Type: Api
+          Properties:
+            Path: /orders/{ticketId}
+            Method: delete
         SearchCustomers:
           Type: Api
           Properties:
@@ -266,6 +273,11 @@ Resources:
           Type: Api
           Properties:
             Path: /admixtures
+            Method: get
+        GetSchedule:
+          Type: Api
+          Properties:
+            Path: /schedule
             Method: get
 
   OrdersFunctionLogGroup:

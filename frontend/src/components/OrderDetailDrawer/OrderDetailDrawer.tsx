@@ -20,8 +20,15 @@ import {
   Chip,
   CircularProgress,
   Stack,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -49,6 +56,7 @@ interface OrderDetailDrawerProps {
   open: boolean;
   onClose: () => void;
   onUpdateRequestedTime?: (ticketNumber: string, newTime: string) => Promise<void>;
+  onDeleteOrder?: (ticketNumber: string) => Promise<void>;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -79,11 +87,13 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime }: OrderDetailDrawerProps) {
+export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime, onDeleteOrder }: OrderDetailDrawerProps) {
   const [mixDetail, setMixDetail] = useState<MixDesignDetail | null>(null);
   const [mixLoading, setMixLoading] = useState(false);
   const [editingTime, setEditingTime] = useState(false);
   const [editTimeValue, setEditTimeValue] = useState<dayjs.Dayjs | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!open || !order?.mixDesignId) {
@@ -98,6 +108,7 @@ export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime 
   }, [open, order?.mixDesignId]);
 
   return (
+    <>
     <Drawer
       anchor="right"
       open={open}
@@ -307,6 +318,22 @@ export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime 
           <SectionHeader>Status Timeline</SectionHeader>
           <StatusTimeline events={order.events} currentStatus={order.status} />
 
+          {/* ── Delete button (pending/cancelled only) ─────────────── */}
+          {onDeleteOrder && (order.status === 'pending' || order.status === 'cancelled') && (
+            <>
+              <Divider sx={{ my: 1.5 }} />
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteOutlineIcon />}
+                fullWidth
+                onClick={() => setDeleteConfirmOpen(true)}
+              >
+                Delete Order
+              </Button>
+            </>
+          )}
+
           {/* Bottom padding so last item isn't flush against edge */}
           <Box sx={{ pb: 3 }} />
         </Box>
@@ -316,5 +343,40 @@ export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime 
         </Box>
       )}
     </Drawer>
+
+    {/* ── Delete confirmation dialog ─────────────────────────────── */}
+    <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+      <DialogTitle>Delete Order</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          Are you sure you want to permanently delete order{' '}
+          <strong>{order?.ticketNumber}</strong>? This action cannot be undone.
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setDeleteConfirmOpen(false)} disabled={deleting}>
+          Cancel
+        </Button>
+        <Button
+          color="error"
+          variant="contained"
+          disabled={deleting}
+          onClick={async () => {
+            if (!order || !onDeleteOrder) return;
+            setDeleting(true);
+            try {
+              await onDeleteOrder(order.ticketNumber);
+              setDeleteConfirmOpen(false);
+              onClose();
+            } finally {
+              setDeleting(false);
+            }
+          }}
+        >
+          {deleting ? 'Deleting...' : 'Delete'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }

@@ -72,6 +72,7 @@ export function OrdersPage() {
     setSelectedDate,
     createOrder,
     updateRequestedTime,
+    deleteOrder,
   } = useOrders();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -267,6 +268,11 @@ export function OrdersPage() {
         open={drawerOpen}
         onClose={handleDrawerClose}
         onUpdateRequestedTime={updateRequestedTime}
+        onDeleteOrder={async (ticketNumber) => {
+          await deleteOrder(ticketNumber);
+          setSelectedOrder(null);
+          setDrawerOpen(false);
+        }}
       />
 
       {/* ── New Order Dialog ───────────────────────────────────────────── */}

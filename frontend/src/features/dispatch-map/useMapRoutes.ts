@@ -1,7 +1,7 @@
 /**
  * useMapRoutes — fetches driving routes from the Mapbox Directions API.
  *
- * Only fetches for dispatched/in_transit orders. Caches by
+ * Fetches for all order statuses. Caches by
  * origin+destination key since plants and job sites don't move.
  */
 
@@ -23,8 +23,8 @@ export function useMapRoutes(
   const [routes, setRoutes] = useState<Record<string, RouteData>>({});
   const cacheRef = useRef<Record<string, RouteData>>({});
 
-  // Fetch routes for active orders AND pending orders (needed for dispatch)
-  const activeStatuses = new Set(['pending', 'dispatched', 'in_transit', 'pouring', 'returning']);
+  // Fetch routes for all order statuses
+  const activeStatuses = new Set(['scheduled', 'pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete']);
   const routeOrders = orders.filter(
     o => activeStatuses.has(o.status) &&
       o.jobSiteLatitude != null && o.jobSiteLongitude != null,

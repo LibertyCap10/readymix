@@ -23,10 +23,13 @@ import {
   PutCommand,
   QueryCommand,
   UpdateCommand,
+  DeleteCommand,
   Tables,
   canTransition,
   VALID_STATUSES,
   computeTimeline,
+  computeConstrainedTimeline,
+  detectScheduleConflict,
   TIMELINE,
 } from '/opt/nodejs/dynamo-client.mjs';
 
@@ -60,7 +63,9 @@ export async function handler(event) {
     if (method === 'GET'   && path === '/orders')            return listOrders(event);
     if (method === 'GET'   && path === '/orders/{ticketId}') return getOrder(event);
     if (method === 'POST'  && path === '/orders')            return createOrder(event);
-    if (method === 'PATCH' && path === '/orders/{ticketId}') return updateOrder(event);
+    if (method === 'PATCH'  && path === '/orders/{ticketId}') return updateOrder(event);
+    if (method === 'DELETE' && path === '/orders/{ticketId}') return deleteOrder(event);
+    if (method === 'GET'   && path === '/schedule')          return getSchedule(event);
     if (method === 'GET'   && path === '/customers/search')   return searchCustomers(event);
     if (method === 'GET'   && path === '/plants')              return listPlants(event);
     if (method === 'GET'   && path === '/mix-designs')         return listMixDesigns(event);
@@ -177,6 +182,58 @@ async function getOrder(event) {
   if (!order) return notFound(`Order ${ticketId} not found for plant ${plantId}`);
 
   return ok(order);
+}
+
+// ─── DELETE /orders/{ticketId} ────────────────────────────────────────────
+//
+// Hard-deletes an order from DynamoDB. Only allowed for pending or cancelled
+// orders to prevent accidentally removing in-flight deliveries.
+//
+// Required query params:
+//   plantId — needed to form the primary key
+//   date    — ISO date (YYYY-MM-DD) to construct the composite SK
+//
+// Required path params:
+//   ticketId — e.g., "TKT-2026-0001"
+
+async function deleteOrder(event) {
+  const { ticketId } = getPathParams(event);
+  const { plantId, date } = getQueryParams(event);
+
+  if (!plantId)  return badRequest('plantId query param is required');
+  if (!ticketId) return badRequest('ticketId path param is required');
+  if (!date)     return badRequest('date query param is required (YYYY-MM-DD)');
+
+  // Find the order to verify it exists and check status
+  const result = await ddb.send(new QueryCommand({
+    TableName: Tables.orders,
+    KeyConditionExpression: 'plantId = :plantId AND begins_with(orderDateTicket, :datePrefix)',
+    FilterExpression: 'ticketNumber = :ticketId',
+    ExpressionAttributeValues: {
+      ':plantId':    plantId,
+      ':datePrefix': `${date}#`,
+      ':ticketId':   ticketId,
+    },
+  }));
+
+  const order = result.Items?.[0];
+  if (!order) return notFound(`Order ${ticketId} not found`);
+
+  // Only allow deletion of pending or cancelled orders
+  if (order.status !== 'pending' && order.status !== 'cancelled') {
+    return badRequest(`Cannot delete order in '${order.status}' status. Only pending or cancelled orders can be deleted.`);
+  }
+
+  // Delete the order
+  await ddb.send(new DeleteCommand({
+    TableName: Tables.orders,
+    Key: {
+      plantId: order.plantId,
+      orderDateTicket: order.orderDateTicket,
+    },
+  }));
+
+  return ok({ deleted: true, ticketNumber: ticketId });
 }
 
 // ─── POST /orders ─────────────────────────────────────────────────────────
@@ -341,26 +398,104 @@ async function updateOrder(event) {
   }
 
   // ── Timeline computation on scheduling ───────────────────────────────────
-  // When scheduling, work backward from requestedTime so concrete arrives on time:
-  //   scheduledDepartureAt = requestedTime - loadingDuration - transitDuration
+  // Multi-order aware: checks truck's existing daily schedule for conflicts
+  // and computes constrained departure if truck has prior commitments.
+  let lateArrivalWarning = null;
+
   if (body.status === 'scheduled' && body.routeData) {
-    const transitMs = body.routeData.durationSeconds * 1000;
-    const departureMs = new Date(current.requestedTime).getTime() - TIMELINE.loadingDurationMs - transitMs;
-    const departureAt = new Date(departureMs).toISOString();
-    const timeline = computeTimeline(
-      departureAt,
-      body.routeData.durationSeconds,
-      current.volume,
-    );
+    const transitMs   = body.routeData.durationSeconds * 1000;
+    const requestedMs = new Date(current.requestedTime).getTime();
+
+    // Ideal departure: work backward from requestedTime
+    const idealDepartureMs = requestedMs - TIMELINE.loadingDurationMs - transitMs;
+
+    // Check truck's existing schedule for the day
+    let actualDepartureMs = idealDepartureMs;
+    let scheduleSequence  = 0;
+    const assignedTruck   = body.assignedTruckId ?? current.assignedTruckId;
+
+    if (assignedTruck) {
+      const truckResult = await ddb.send(new GetCommand({
+        TableName: Tables.trucks,
+        Key: { truckId: assignedTruck },
+      }));
+      const truckDoc = truckResult.Item;
+      const orderDate = date; // YYYY-MM-DD from query params
+      const existingBlocks = truckDoc?.dailySchedule?.[orderDate] ?? [];
+
+      if (existingBlocks.length > 0) {
+        // Find the latest block that ends before our ideal departure
+        const sortedBlocks = [...existingBlocks].sort(
+          (a, b) => new Date(a.scheduledDepartureAt).getTime() - new Date(b.scheduledDepartureAt).getTime()
+        );
+
+        // Find insertion point and constrained departure
+        let priorReturnAt = null;
+        for (const block of sortedBlocks) {
+          const blockEnd = new Date(block.returnArrivalAt).getTime();
+          if (blockEnd <= idealDepartureMs) {
+            priorReturnAt = blockEnd;
+          }
+        }
+
+        // If there's a prior block, constrain departure to after its return + buffer
+        if (priorReturnAt != null) {
+          const constrainedMs = priorReturnAt + TIMELINE.bufferBetweenJobsMs;
+          if (constrainedMs > idealDepartureMs) {
+            actualDepartureMs = constrainedMs;
+          }
+        }
+
+        // Compute proposed timeline for conflict detection
+        const proposedTimeline = computeTimeline(
+          new Date(actualDepartureMs).toISOString(),
+          body.routeData.durationSeconds,
+          current.volume,
+        );
+
+        const conflictResult = detectScheduleConflict(existingBlocks, proposedTimeline);
+        if (conflictResult.conflict) {
+          return conflict(
+            `Truck schedule conflict: overlaps with order ${conflictResult.overlappingTicket}. ` +
+            `Choose a different truck or adjust the requested time.`
+          );
+        }
+
+        // Determine sequence position (chronological insertion)
+        scheduleSequence = sortedBlocks.filter(
+          b => new Date(b.scheduledDepartureAt).getTime() < actualDepartureMs
+        ).length;
+      }
+    }
+
+    const departureAt = new Date(actualDepartureMs).toISOString();
+    const timeline    = computeTimeline(departureAt, body.routeData.durationSeconds, current.volume);
+
+    // Check if constrained departure causes late arrival
+    const arrivalMs = new Date(timeline.transitArrivalAt).getTime();
+    if (arrivalMs > requestedMs + 5 * 60 * 1000) { // 5 min tolerance
+      const lateByMinutes = Math.round((arrivalMs - requestedMs) / 60000);
+      lateArrivalWarning = `Truck will arrive ~${lateByMinutes} min after requested time due to prior commitment`;
+    }
+
     setClauses.push('timeline = :timeline');
     exprValues[':timeline'] = timeline;
 
     setClauses.push('routeData = :routeData');
     exprValues[':routeData'] = {
-      coordinates:    body.routeData.coordinates,
-      distanceMeters: body.routeData.distanceMeters,
+      coordinates:     body.routeData.coordinates,
+      distanceMeters:  body.routeData.distanceMeters,
       durationSeconds: body.routeData.durationSeconds,
     };
+
+    // Multi-order scheduling fields
+    setClauses.push('scheduleSequence = :seq');
+    exprValues[':seq'] = scheduleSequence;
+
+    if (actualDepartureMs !== idealDepartureMs) {
+      setClauses.push('constrainedDepartureAt = :cda');
+      exprValues[':cda'] = departureAt;
+    }
   }
 
   // ── Undispatching (scheduled/dispatched/in_transit/pouring -> pending) ───
@@ -458,14 +593,47 @@ async function updateOrder(event) {
           TableName: Tables.plants, Key: { plantId },
         }));
         const plantData = plantResult.Item;
+
+        // Re-fetch order to get computed timeline for dailySchedule cache
+        const scheduledOrder = await ddb.send(new GetCommand({
+          TableName: Tables.orders,
+          Key: { plantId, orderDateTicket },
+        }));
+        const so = scheduledOrder.Item;
+
+        // Build the dailySchedule cache entry
+        const scheduleEntry = {
+          ticketNumber: current.ticketNumber,
+          scheduledDepartureAt: so.timeline.scheduledDepartureAt,
+          returnArrivalAt: so.timeline.returnArrivalAt,
+          status: 'scheduled',
+        };
+
+        // Read current truck to get existing dailySchedule
+        const truckDoc = await ddb.send(new GetCommand({
+          TableName: Tables.trucks, Key: { truckId },
+        }));
+        const existingSchedule = truckDoc.Item?.dailySchedule ?? {};
+        const dayBlocks = existingSchedule[date] ?? [];
+        dayBlocks.push(scheduleEntry);
+        dayBlocks.sort((a, b) => new Date(a.scheduledDepartureAt) - new Date(b.scheduledDepartureAt));
+        existingSchedule[date] = dayBlocks;
+
+        // Compute nextAvailableAt from the last block
+        const lastBlock = dayBlocks[dayBlocks.length - 1];
+        const nextAvailableAt = new Date(
+          new Date(lastBlock.returnArrivalAt).getTime() + TIMELINE.bufferBetweenJobsMs
+        ).toISOString();
+
         await ddb.send(new UpdateCommand({
           TableName: Tables.trucks,
           Key: { truckId },
-          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :oid, currentJobSite = :js, lastUpdated = :now, latitude = :lat, longitude = :lng',
+          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :oid, currentJobSite = :js, lastUpdated = :now, latitude = :lat, longitude = :lng, dailySchedule = :ds, estimatedAvailableAt = :eta',
           ExpressionAttributeValues: {
             ':st': 'scheduled', ':oid': current.ticketNumber,
             ':js': current.jobSiteName, ':now': now,
             ':lat': plantData?.latitude ?? null, ':lng': plantData?.longitude ?? null,
+            ':ds': existingSchedule, ':eta': nextAvailableAt,
           },
         }));
       } else if (body.status === 'dispatched') {
@@ -543,7 +711,105 @@ async function updateOrder(event) {
     Key: { plantId, orderDateTicket },
   }));
 
-  return ok(updated.Item);
+  const response = { ...updated.Item };
+  if (lateArrivalWarning) response.lateArrivalWarning = lateArrivalWarning;
+
+  return ok(response);
+}
+
+// ─── GET /schedule ───────────────────────────────────────────────────────
+//
+// Returns the daily schedule for all trucks at a plant, grouped by truck
+// with time blocks and unassigned orders.
+//
+// Required query params:
+//   plantId — which plant to query
+//   date    — ISO date (YYYY-MM-DD)
+
+async function getSchedule(event) {
+  const { plantId, date } = getQueryParams(event);
+
+  if (!plantId) return badRequest('plantId is required');
+  if (!date)    return badRequest('date is required (YYYY-MM-DD)');
+
+  // Fetch all orders for the plant+date
+  const ordersResult = await ddb.send(new QueryCommand({
+    TableName: Tables.orders,
+    KeyConditionExpression: 'plantId = :pid AND begins_with(orderDateTicket, :prefix)',
+    ExpressionAttributeValues: { ':pid': plantId, ':prefix': `${date}#` },
+  }));
+  const allOrders = ordersResult.Items ?? [];
+
+  // Fetch all trucks for the plant
+  const trucksResult = await ddb.send(new QueryCommand({
+    TableName: Tables.trucks,
+    IndexName: 'plant-status-index',
+    KeyConditionExpression: 'plantId = :pid',
+    ExpressionAttributeValues: { ':pid': plantId },
+  }));
+  const allTrucks = trucksResult.Items ?? [];
+
+  // Group orders by assigned truck
+  const assignedByTruck = {};
+  const unassignedOrders = [];
+
+  for (const order of allOrders) {
+    if (order.assignedTruckId && order.timeline && order.status !== 'cancelled') {
+      if (!assignedByTruck[order.assignedTruckId]) {
+        assignedByTruck[order.assignedTruckId] = [];
+      }
+      assignedByTruck[order.assignedTruckId].push(order);
+    } else if (order.status === 'pending') {
+      unassignedOrders.push(order);
+    }
+  }
+
+  // Build schedule for each truck
+  const schedules = allTrucks
+    .filter(t => t.currentStatus !== 'maintenance')
+    .map(truck => {
+      const orders = assignedByTruck[truck.truckId] ?? [];
+      orders.sort((a, b) => (a.scheduleSequence ?? 0) - (b.scheduleSequence ?? 0));
+
+      const blocks = orders.map(o => ({
+        ticketNumber:         o.ticketNumber,
+        customerName:         o.customerName,
+        jobSiteName:          o.jobSiteName,
+        volume:               o.volume,
+        pourType:             o.pourType,
+        isHotLoad:            o.isHotLoad,
+        status:               o.status,
+        requestedTime:        o.requestedTime,
+        scheduledDepartureAt: o.timeline.scheduledDepartureAt,
+        loadingCompletesAt:   o.timeline.loadingCompletesAt,
+        transitArrivalAt:     o.timeline.transitArrivalAt,
+        pourCompletesAt:      o.timeline.pourCompletesAt,
+        returnDepartureAt:    o.timeline.returnDepartureAt,
+        returnArrivalAt:      o.timeline.returnArrivalAt,
+      }));
+
+      const lastBlock = blocks[blocks.length - 1];
+      const nextAvailableAt = lastBlock
+        ? new Date(new Date(lastBlock.returnArrivalAt).getTime() + TIMELINE.bufferBetweenJobsMs).toISOString()
+        : null;
+
+      return {
+        truckId:        truck.truckId,
+        truckNumber:    truck.truckNumber,
+        driverName:     truck.driver?.name ?? truck.driverName ?? '',
+        currentStatus:  truck.currentStatus,
+        blocks,
+        nextAvailableAt,
+      };
+    })
+    .sort((a, b) => {
+      // Trucks with blocks first, then by truck number
+      if (a.blocks.length > 0 && b.blocks.length === 0) return -1;
+      if (a.blocks.length === 0 && b.blocks.length > 0) return 1;
+      return a.truckNumber.localeCompare(b.truckNumber, undefined, { numeric: true });
+    });
+
+  return ok({ schedules, unassignedOrders });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

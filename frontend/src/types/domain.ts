@@ -227,6 +227,41 @@ export interface Order {
   timeline?: OrderTimeline;
   routeData?: OrderRouteData;
   cancellation?: OrderCancellation;
+
+  // Multi-order scheduling fields (populated when truck has multiple orders/day)
+  scheduleSequence?: number;           // 0-based position in truck's daily queue
+  constrainedDepartureAt?: string;     // ISO — earliest departure after prior job + buffer
+}
+
+// ─── Schedule (Gantt) View Types ────────────────────────────
+export interface TruckScheduleBlock {
+  ticketNumber: string;
+  customerName: string;
+  jobSiteName: string;
+  volume: number;
+  pourType: PourType;
+  isHotLoad: boolean;
+  status: OrderStatus;
+  requestedTime: string;
+  scheduledDepartureAt: string;
+  loadingCompletesAt: string;
+  transitArrivalAt: string;
+  pourCompletesAt: string;
+  returnDepartureAt: string;
+  returnArrivalAt: string;
+}
+
+export interface TruckDaySchedule {
+  truckId: string;
+  truckNumber: string;
+  driverName: string;
+  blocks: TruckScheduleBlock[];
+  nextAvailableAt: string | null;    // ISO — when truck is next free, null if no blocks
+}
+
+export interface ScheduleResponse {
+  schedules: TruckDaySchedule[];
+  unassignedOrders: Order[];
 }
 
 // ─── Analytics ───────────────────────────────────────────

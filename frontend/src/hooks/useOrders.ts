@@ -42,6 +42,7 @@ export interface UseOrdersReturn {
   updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string, routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number }, truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string }) => Promise<void>;
   assignTruck: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
   updateRequestedTime: (ticketNumber: string, newRequestedTime: string) => Promise<void>;
+  deleteOrder: (ticketNumber: string) => Promise<void>;
 }
 
 // Everything the caller must supply to create a new order
@@ -60,6 +61,8 @@ export interface NewOrderDraft {
   requestedTime: string;         // ISO datetime
   isHotLoad: boolean;
   notes?: string;
+  jobSiteLatitude?: number;
+  jobSiteLongitude?: number;
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -200,6 +203,27 @@ export function useOrders(): UseOrdersReturn {
     }
   }, [selectedPlant.plantId, selectedDate]);
 
+  // ── deleteOrder (pending/cancelled only) ─────────────────────────────────
+  const deleteOrder = useCallback(async (ticketNumber: string) => {
+    const existing = orders.find((o) => o.ticketNumber === ticketNumber);
+    if (!existing) return;
+    if (existing.status !== 'pending' && existing.status !== 'cancelled') {
+      setError('Only pending or cancelled orders can be deleted');
+      return;
+    }
+
+    try {
+      await api.delete(`/orders/${ticketNumber}`, {
+        plantId: selectedPlant.plantId,
+        date: selectedDate,
+      });
+      setOrders((prev) => prev.filter((o) => o.ticketNumber !== ticketNumber));
+    } catch (err: unknown) {
+      const apiErr = err as { status?: number; message?: string };
+      setError(apiErr.message ?? 'Failed to delete order');
+    }
+  }, [orders, selectedPlant.plantId, selectedDate]);
+
   return {
     orders,
     loading,
@@ -210,5 +234,6 @@ export function useOrders(): UseOrdersReturn {
     updateOrderStatus,
     assignTruck,
     updateRequestedTime,
+    deleteOrder,
   };
 }

@@ -88,6 +88,8 @@ interface FormState {
   requestedTime: Dayjs | null;
   isHotLoad: boolean;
   notes: string;
+  jobSiteLatitude?: number;
+  jobSiteLongitude?: number;
 }
 
 const EMPTY_FORM: FormState = {
@@ -105,6 +107,8 @@ const EMPTY_FORM: FormState = {
   requestedTime: null,
   isHotLoad: false,
   notes: '',
+  jobSiteLatitude: undefined,
+  jobSiteLongitude: undefined,
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -182,14 +186,14 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
   }, [form, submitted]);
 
   // Fetch job sites when a customer is selected
-  const [jobSites, setJobSites] = useState<Array<{ siteId: string; name: string; address: string; city: string; state: string }>>([]);
+  const [jobSites, setJobSites] = useState<Array<{ siteId: string; name: string; address: string; city: string; state: string; latitude?: number; longitude?: number }>>([]);
 
   useEffect(() => {
     if (!form.customerId) {
       setJobSites([]);
       return;
     }
-    api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string }> }>(
+    api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string; latitude?: number; longitude?: number }> }>(
       `/customers/${form.customerId}/job-sites`
     )
       .then((data) => setJobSites(data.jobSites))
@@ -212,6 +216,8 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
       requestedTime: f.requestedTime?.toISOString() ?? undefined,
       isHotLoad: f.isHotLoad,
       notes: f.notes || undefined,
+      jobSiteLatitude: f.jobSiteLatitude,
+      jobSiteLongitude: f.jobSiteLongitude,
     };
   }
 
@@ -236,9 +242,9 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
     if (!customer) return;
     setSelectedCustomer(customer);
 
-    let site: { siteId: string; name: string; address: string; city: string; state: string } | undefined;
+    let site: { siteId: string; name: string; address: string; city: string; state: string; latitude?: number; longitude?: number } | undefined;
     try {
-      const data = await api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string }> }>(
+      const data = await api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string; latitude?: number; longitude?: number }> }>(
         `/customers/${customer.id}/job-sites`,
       );
       site = data.jobSites[Math.floor(Math.random() * data.jobSites.length)];
@@ -257,6 +263,8 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
       jobSiteId: site?.siteId ?? '',
       jobSiteName: site?.name ?? '',
       jobSiteAddress: site ? `${site.address}, ${site.city}, ${site.state}` : '',
+      jobSiteLatitude: site?.latitude,
+      jobSiteLongitude: site?.longitude,
       mixDesignId: mix?.mixDesignId ?? '',
       mixDesignName: mix?.name ?? '',
       psi: mix?.psi ?? 0,
@@ -348,6 +356,8 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
                   jobSiteId: site?.siteId ?? '',
                   jobSiteName: site?.name ?? '',
                   jobSiteAddress: site ? `${site.address}, ${site.city}, ${site.state}` : '',
+                  jobSiteLatitude: site?.latitude,
+                  jobSiteLongitude: site?.longitude,
                 }));
               }}
               disabled={!form.customerId}

@@ -41,6 +41,7 @@ export default defineConfig({
       },
       '/customers': 'http://localhost:3001',
       '/plants': 'http://localhost:3001',
+      '/schedule': 'http://localhost:3001',
     },
   },
 });

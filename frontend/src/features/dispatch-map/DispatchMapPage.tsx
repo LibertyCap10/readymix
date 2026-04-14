@@ -12,11 +12,13 @@ import { useDispatchMap } from './useDispatchMap';
 import { useMapRoutes } from './useMapRoutes';
 import { useDispatchMapFilters } from './useDispatchMapFilters';
 import { MapToolbar } from './MapToolbar';
+import type { DispatchViewMode } from './MapToolbar';
 import { MapView } from './MapView';
 import { SidePanel } from './SidePanel';
 import { BottomSheet } from './BottomSheet';
 import { AssignTruckDialog } from './AssignTruckDialog';
 import { TimelineProvider } from '@/features/timeline/TimelineContext';
+import { ScheduleGantt, useScheduleData } from '@/features/schedule';
 import type { Order, Truck } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 
@@ -55,6 +57,10 @@ export function DispatchMapPage() {
   // Routes are fetched for ALL active orders (not just filtered) so they're
   // ready instantly when the user selects an order or toggles "show all routes"
   const routes = useMapRoutes(orders, plant);
+
+  // View mode: map vs schedule (Gantt)
+  const [viewMode, setViewMode] = useState<DispatchViewMode>('map');
+  const scheduleData = useScheduleData(selectedDate);
 
   // UI state
   const [sidePanelOpen, setSidePanelOpen] = useState(true);
@@ -105,6 +111,22 @@ export function DispatchMapPage() {
     [updateOrderStatus],
   );
 
+  // Schedule Gantt callbacks — must be before early returns to satisfy Rules of Hooks
+  const handleScheduleBlockClick = useCallback((ticketNumber: string) => {
+    setSelectedTicket(ticketNumber);
+  }, []);
+
+  const handleScheduleGapClick = useCallback((_truckId: string, _gapStart: string, _gapEnd: string) => {
+    // Find a pending order to assign — for now just open the first unassigned
+    const unassigned = allOrders.find(o => o.status === 'pending' && !o.assignedTruckId);
+    if (unassigned) setAssignOrder(unassigned);
+  }, [allOrders]);
+
+  const handleUnassignedClick = useCallback((ticketNumber: string) => {
+    const order = allOrders.find(o => o.ticketNumber === ticketNumber);
+    if (order) setAssignOrder(order);
+  }, [allOrders]);
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
@@ -140,6 +162,8 @@ export function DispatchMapPage() {
       onClearFilters={filters.clearFilters}
       filteredCount={filters.filteredOrders.length}
       totalCount={filters.totalCount}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
     />
   );
 
@@ -192,36 +216,47 @@ export function DispatchMapPage() {
   return timelineWrapper(
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {toolbar}
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <MapView
-            plant={plant}
-            orders={mappableFilteredOrders}
-            allOrders={allOrders}
-            trucks={trucks}
-            routes={routes}
-            selectedTicket={selectedTicket}
-            showAllRoutes={filters.showAllRoutes}
-            showTrucks={filters.showTrucks}
-            onOrderSelect={handleOrderSelect}
-            onTruckSelect={handleTruckSelect}
-            onAssignTruck={handleAssignTruck}
-            onUpdateStatus={handleUpdateStatus}
-            sidePanelHidden={!sidePanelOpen}
-            onToggleSidePanel={() => setSidePanelOpen(true)}
-          />
+      {viewMode === 'schedule' ? (
+        <ScheduleGantt
+          data={scheduleData.data}
+          loading={scheduleData.loading}
+          date={selectedDate}
+          onBlockClick={handleScheduleBlockClick}
+          onGapClick={handleScheduleGapClick}
+          onUnassignedClick={handleUnassignedClick}
+        />
+      ) : (
+        <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <MapView
+              plant={plant}
+              orders={mappableFilteredOrders}
+              allOrders={allOrders}
+              trucks={trucks}
+              routes={routes}
+              selectedTicket={selectedTicket}
+              showAllRoutes={filters.showAllRoutes}
+              showTrucks={filters.showTrucks}
+              onOrderSelect={handleOrderSelect}
+              onTruckSelect={handleTruckSelect}
+              onAssignTruck={handleAssignTruck}
+              onUpdateStatus={handleUpdateStatus}
+              sidePanelHidden={!sidePanelOpen}
+              onToggleSidePanel={() => setSidePanelOpen(true)}
+            />
+          </Box>
+          {sidePanelOpen && (
+            <SidePanel
+              orders={filters.filteredOrders}
+              totalCount={filters.totalCount}
+              isFiltered={filters.isFiltered}
+              onOrderSelect={handleOrderSelect}
+              onClose={() => setSidePanelOpen(false)}
+              selectedTicket={selectedTicket ?? undefined}
+            />
+          )}
         </Box>
-        {sidePanelOpen && (
-          <SidePanel
-            orders={filters.filteredOrders}
-            totalCount={filters.totalCount}
-            isFiltered={filters.isFiltered}
-            onOrderSelect={handleOrderSelect}
-            onClose={() => setSidePanelOpen(false)}
-            selectedTicket={selectedTicket ?? undefined}
-          />
-        )}
-      </Box>
+      )}
       <AssignTruckDialog
         open={!!assignOrder}
         onClose={() => setAssignOrder(null)}
