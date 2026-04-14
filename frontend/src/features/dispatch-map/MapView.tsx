@@ -11,7 +11,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import Map, { Marker, Popup, Source, Layer, type ViewStateChangeEvent, type MapRef } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { Box, Typography, Button, IconButton } from '@mui/material';
+import { Box, Typography, Button, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions } from '@mui/material';
 import FactoryIcon from '@mui/icons-material/Factory';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import PlaceIcon from '@mui/icons-material/Place';
@@ -123,6 +123,7 @@ export function MapView({
   const [popupOrder, setPopupOrder] = useState<Order | null>(null);
   const [popupTruck, setPopupTruck] = useState<Truck | null>(null);
   const [popupPlant, setPopupPlant] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState<Order | null>(null);
 
   // Trucks physically at the plant (including those in loading phase)
   const trucksAtPlant = useMemo(
@@ -481,7 +482,7 @@ export function MapView({
                       Assign Truck
                     </Button>
                   )}
-                  {NEXT_STATUS[popupOrder.status] && !['pending', 'scheduled'].includes(popupOrder.status) && (
+                  {NEXT_STATUS[popupOrder.status] && !['pending', 'scheduled', 'pouring'].includes(popupOrder.status) && (
                     <Button
                       size="small"
                       variant="outlined"
@@ -490,13 +491,13 @@ export function MapView({
                       {orderStatusColors[NEXT_STATUS[popupOrder.status]!]?.label ?? 'Next'}
                     </Button>
                   )}
-                  {!['complete', 'cancelled'].includes(popupOrder.status) && (
+                  {!['pending', 'complete', 'cancelled'].includes(popupOrder.status) && (
                     <Button
                       size="small"
                       color="error"
-                      onClick={() => onUpdateStatus(popupOrder.ticketNumber, 'cancelled')}
+                      onClick={() => setCancelConfirm(popupOrder)}
                     >
-                      Cancel
+                      Cancel Dispatch
                     </Button>
                   )}
                 </Box>
@@ -611,6 +612,34 @@ export function MapView({
           <MenuOpenIcon />
         </IconButton>
       )}
+      {/* ── Cancel dispatch confirmation dialog ────────────────── */}
+      <Dialog open={!!cancelConfirm} onClose={() => setCancelConfirm(null)}>
+        <DialogTitle>Cancel Dispatch</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Cancel dispatch for {cancelConfirm?.ticketNumber}? The order will return to Pending
+            {cancelConfirm && ['in_transit', 'pouring'].includes(cancelConfirm.status)
+              ? ' and the truck will begin returning to the plant.'
+              : ' and the truck will be made available.'}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelConfirm(null)}>No, Keep</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => {
+              if (cancelConfirm) {
+                onUpdateStatus(cancelConfirm.ticketNumber, 'pending');
+                setPopupOrder(null);
+              }
+              setCancelConfirm(null);
+            }}
+          >
+            Yes, Cancel Dispatch
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

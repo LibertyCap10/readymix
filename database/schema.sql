@@ -547,33 +547,84 @@ INSERT INTO plant_operating_hours (plant_id, day, open_time, close_time) VALUES
     ('a1000000-0000-0000-0000-000000000001', 'saturday', '06:00', '12:00'),
     ('a1000000-0000-0000-0000-000000000001', 'sunday', '00:00', '00:00');
 
--- Customers
+-- Customers (Austin, TX metro area)
 INSERT INTO customers (id, name, account_number, billing_address, city, state, zip, phone, credit_limit, payment_terms) VALUES
-    ('c1000000-0000-0000-0000-000000000001', 'Nabholz Construction', 'ACCT-001', '605 Main St', 'Conway', 'AR', '72032', '501-555-1001', 500000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000002', 'Cranford Construction', 'ACCT-002', '1400 E Oak St', 'Conway', 'AR', '72032', '501-555-1002', 250000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000003', 'Ridout Lumber', 'ACCT-003', '700 Front St', 'Conway', 'AR', '72032', '501-555-1003', 150000, 'NET15'),
-    ('c1000000-0000-0000-0000-000000000004', 'Clark Contractors', 'ACCT-004', '820 Court St', 'Little Rock', 'AR', '72201', '501-555-1004', 750000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000005', 'Brasfield & Gorrie', 'ACCT-005', '3000 Cantrell Rd', 'Little Rock', 'AR', '72202', '501-555-1005', 1000000, 'NET45'),
-    ('c1000000-0000-0000-0000-000000000006', 'Milestone Construction', 'ACCT-006', '200 River Market Ave', 'Little Rock', 'AR', '72201', '501-555-1006', 300000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000007', 'Perry Construction', 'ACCT-007', '115 W 3rd St', 'Morrilton', 'AR', '72110', '501-555-1007', 200000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000008', 'Flynco', 'ACCT-008', '9 Shackleford Plaza', 'Little Rock', 'AR', '72211', '501-555-1008', 400000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000009', 'Kinco Constructors', 'ACCT-009', '100 Morgan Keegan Dr', 'Little Rock', 'AR', '72202', '501-555-1009', 600000, 'NET30'),
-    ('c1000000-0000-0000-0000-000000000010', 'CDI Contractors', 'ACCT-010', '400 Broadway Ave', 'North Little Rock', 'AR', '72114', '501-555-1010', 350000, 'NET30');
+    ('c1000000-0000-0000-0000-000000000001', 'Hill Country Builders', 'ACCT-001', '8900 Shoal Creek Blvd', 'Austin', 'TX', '78757', '512-555-1001', 500000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000002', 'Lone Star Commercial Construction', 'ACCT-002', '11500 Domain Dr Ste 200', 'Austin', 'TX', '78758', '512-555-1002', 750000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000003', 'Capital City Concrete Works', 'ACCT-003', '4200 Mueller Blvd', 'Austin', 'TX', '78723', '512-555-1003', 300000, 'NET15'),
+    ('c1000000-0000-0000-0000-000000000004', 'Texan Foundation Specialists', 'ACCT-004', '3100 S Lamar Blvd', 'Austin', 'TX', '78704', '512-555-1004', 400000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000005', 'Austin Paving & Grading', 'ACCT-005', '2201 E Ben White Blvd', 'Austin', 'TX', '78741', '512-555-1005', 600000, 'NET45'),
+    ('c1000000-0000-0000-0000-000000000006', 'Precision Structures Inc', 'ACCT-006', '1800 S Congress Ave', 'Austin', 'TX', '78704', '512-555-1006', 350000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000007', 'Bluebonnet Development Group', 'ACCT-007', '100 E Pflugerville Pkwy', 'Pflugerville', 'TX', '78660', '512-555-1007', 250000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000008', 'Cedar Park Construction Co', 'ACCT-008', '2150 Cypress Creek Rd', 'Cedar Park', 'TX', '78613', '512-555-1008', 450000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000009', 'Rio Grande Masonry LLC', 'ACCT-009', '2400 E Riverside Dr', 'Austin', 'TX', '78741', '512-555-1009', 200000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000010', 'Summit Builders LLC', 'ACCT-010', '12900 Bee Cave Pkwy', 'Bee Cave', 'TX', '78738', '512-555-1010', 500000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000011', 'Round Rock Commercial Builders', 'ACCT-011', '3001 S IH-35', 'Round Rock', 'TX', '78664', '512-555-1011', 800000, 'NET45'),
+    ('c1000000-0000-0000-0000-000000000012', 'Travis County Infrastructure', 'ACCT-012', '700 Lavaca St', 'Austin', 'TX', '78701', '512-555-1012', 1000000, 'NET45'),
+    ('c1000000-0000-0000-0000-000000000013', 'Lakeway Residential Partners', 'ACCT-013', '1941 Lohmans Crossing Rd', 'Lakeway', 'TX', '78734', '512-555-1013', 300000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000014', 'Georgetown Grading & Paving', 'ACCT-014', '3600 D B Wood Rd', 'Georgetown', 'TX', '78628', '512-555-1014', 350000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000015', 'Mueller Development Group', 'ACCT-015', '4715 Airport Blvd', 'Austin', 'TX', '78751', '512-555-1015', 450000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000016', 'Dripping Springs Contractors', 'ACCT-016', '100 Old Fitzhugh Rd', 'Dripping Springs', 'TX', '78620', '512-555-1016', 200000, 'NET15'),
+    ('c1000000-0000-0000-0000-000000000017', 'Hutto Site Development', 'ACCT-017', '409 W Front St', 'Hutto', 'TX', '78634', '512-555-1017', 250000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000018', 'Leander Civil Constructors', 'ACCT-018', '200 W Willis St', 'Leander', 'TX', '78641', '512-555-1018', 400000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000019', 'Barton Creek Builders', 'ACCT-019', '4805 S MoPac Expy', 'Austin', 'TX', '78749', '512-555-1019', 550000, 'NET30'),
+    ('c1000000-0000-0000-0000-000000000020', 'Williamson County Roads LLC', 'ACCT-020', '710 Main St Ste 200', 'Georgetown', 'TX', '78626', '512-555-1020', 700000, 'NET45');
 
--- Customer contacts
+-- Customer contacts (Austin, TX metro area)
 INSERT INTO customer_contacts (customer_id, name, title, phone, email, is_primary) VALUES
-    ('c1000000-0000-0000-0000-000000000001', 'Jim Nabholz', 'Project Manager', '501-555-2001', 'jim@nabholz.com', true),
-    ('c1000000-0000-0000-0000-000000000001', 'Sarah Chen', 'Superintendent', '501-555-2002', 'schen@nabholz.com', false),
-    ('c1000000-0000-0000-0000-000000000004', 'Mike Clark', 'Owner', '501-555-2004', 'mike@clarkcontractors.com', true),
-    ('c1000000-0000-0000-0000-000000000005', 'David Walsh', 'VP Operations', '501-555-2005', 'dwalsh@brasfieldgorrie.com', true);
+    ('c1000000-0000-0000-0000-000000000001', 'Mike Torres', 'Project Manager', '512-555-2001', 'mtorres@hcbuilders.com', true),
+    ('c1000000-0000-0000-0000-000000000001', 'Sarah Chen', 'Superintendent', '512-555-2002', 'schen@hcbuilders.com', false),
+    ('c1000000-0000-0000-0000-000000000002', 'James Walker', 'VP Operations', '512-555-2003', 'jwalker@lonestarcomm.com', true),
+    ('c1000000-0000-0000-0000-000000000002', 'Diana Reeves', 'Project Engineer', '512-555-2004', 'dreeves@lonestarcomm.com', false),
+    ('c1000000-0000-0000-0000-000000000003', 'Lisa Nguyen', 'Owner', '512-555-2005', 'lisa@capcityconcrete.com', true),
+    ('c1000000-0000-0000-0000-000000000004', 'Roberto Garza', 'Foreman', '512-555-2006', 'rgarza@texanfound.com', true),
+    ('c1000000-0000-0000-0000-000000000005', 'Tom Bradley', 'Operations Mgr', '512-555-2007', 'tbradley@austinpaving.com', true),
+    ('c1000000-0000-0000-0000-000000000005', 'Kevin Park', 'Estimator', '512-555-2008', 'kpark@austinpaving.com', false),
+    ('c1000000-0000-0000-0000-000000000006', 'Amanda Phillips', 'Project Engineer', '512-555-2009', 'aphillips@precisionstr.com', true),
+    ('c1000000-0000-0000-0000-000000000007', 'Derek Kim', 'Site Manager', '512-555-2010', 'dkim@bluebonnetdev.com', true),
+    ('c1000000-0000-0000-0000-000000000008', 'Rachel Morrison', 'Superintendent', '512-555-2011', 'rmorrison@cedarparkconst.com', true),
+    ('c1000000-0000-0000-0000-000000000009', 'Carlos Mendez', 'Owner', '512-555-2012', 'cmendez@riograndemasonry.com', true),
+    ('c1000000-0000-0000-0000-000000000010', 'Patricia Hong', 'Project Director', '512-555-2013', 'phong@summitbuilders.com', true),
+    ('c1000000-0000-0000-0000-000000000011', 'Brian Ortiz', 'VP Construction', '512-555-2014', 'bortiz@rrcommercial.com', true),
+    ('c1000000-0000-0000-0000-000000000011', 'Samantha Lee', 'Project Manager', '512-555-2015', 'slee@rrcommercial.com', false),
+    ('c1000000-0000-0000-0000-000000000012', 'Marcus Johnson', 'Director of Public Works', '512-555-2016', 'mjohnson@traviscounty.gov', true),
+    ('c1000000-0000-0000-0000-000000000012', 'Heather Banks', 'Project Coordinator', '512-555-2017', 'hbanks@traviscounty.gov', false),
+    ('c1000000-0000-0000-0000-000000000013', 'Steve Whitfield', 'Managing Partner', '512-555-2018', 'swhitfield@lakewayresidential.com', true),
+    ('c1000000-0000-0000-0000-000000000014', 'Ray Dominguez', 'Operations Mgr', '512-555-2019', 'rdominguez@gtowngrading.com', true),
+    ('c1000000-0000-0000-0000-000000000015', 'Tanya Frost', 'Development Manager', '512-555-2020', 'tfrost@muellerdev.com', true),
+    ('c1000000-0000-0000-0000-000000000016', 'Jeff Harding', 'Owner', '512-555-2021', 'jharding@dscontractors.com', true),
+    ('c1000000-0000-0000-0000-000000000017', 'Nathan Wolfe', 'Site Superintendent', '512-555-2022', 'nwolfe@huttositedev.com', true),
+    ('c1000000-0000-0000-0000-000000000018', 'Maria Vasquez', 'Project Manager', '512-555-2023', 'mvasquez@leandercivil.com', true),
+    ('c1000000-0000-0000-0000-000000000019', 'Chris Davenport', 'Superintendent', '512-555-2024', 'cdavenport@bartoncreekbldrs.com', true),
+    ('c1000000-0000-0000-0000-000000000020', 'Kelly Swanson', 'County Engineer', '512-555-2025', 'kswanson@wilco.gov', true);
 
--- Customer job sites
+-- Customer job sites (Austin, TX metro area)
 INSERT INTO customer_job_sites (id, customer_id, name, address, city, state, zip, lat, lng, site_contact, site_phone, special_instructions) VALUES
-    ('b1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'Centennial Bank HQ Expansion', '1501 Harkrider St', 'Conway', 'AR', '72032', 35.0917, -92.4283, 'Tom Reeves', '501-555-3001', 'Enter from south gate. Hard hats required.'),
-    ('b1000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000002', 'Conway Commons Phase II', '801 Elsinger Blvd', 'Conway', 'AR', '72032', 35.0756, -92.4602, 'Rick Cranford', '501-555-3002', 'Check in at trailer before unloading.'),
-    ('b1000000-0000-0000-0000-000000000003', 'c1000000-0000-0000-0000-000000000004', 'Hwy 65 Bridge Deck', 'Hwy 65 & Dave Ward Dr', 'Conway', 'AR', '72032', 35.0840, -92.4350, 'Bill Thompson', '501-555-3003', 'ARDOT project. Flaggers will guide trucks. No weekend pours.'),
-    ('b1000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000005', 'Cantrell Rd Office Park', '4500 Cantrell Rd', 'Little Rock', 'AR', '72202', 34.7505, -92.3080, 'David Walsh', '501-555-3004', NULL),
-    ('b1000000-0000-0000-0000-000000000005', 'c1000000-0000-0000-0000-000000000006', 'River Market Parking Structure', '400 President Clinton Ave', 'Little Rock', 'AR', '72201', 34.7490, -92.2710, 'Amy Rodriguez', '501-555-3005', 'Gate code: 4421');
+    ('b1000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'Lakewood Estates Phase 2', '800 Lakewood Dr', 'Austin', 'TX', '78703', 30.3100, -97.7500, 'Sarah Chen', '512-555-3001', 'Enter from south gate. Gate code: 4521'),
+    ('b1000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', 'Tarrytown Infill Project', '2600 Pecos St', 'Austin', 'TX', '78703', 30.3020, -97.7680, 'Mike Torres', '512-555-3002', 'Narrow street — rear discharge only.'),
+    ('b1000000-0000-0000-0000-000000000003', 'c1000000-0000-0000-0000-000000000002', 'Domain Tower III', '11500 Domain Dr', 'Austin', 'TX', '78758', 30.4020, -97.7250, 'James Walker', '512-555-3003', 'Check in at construction trailer, north lot.'),
+    ('b1000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000002', 'Parmer Tech Campus', '14000 N MoPac Expy', 'Austin', 'TX', '78728', 30.4450, -97.7180, 'Diana Reeves', '512-555-3004', NULL),
+    ('b1000000-0000-0000-0000-000000000005', 'c1000000-0000-0000-0000-000000000003', 'Mueller Mixed-Use Development', '4200 Mueller Blvd', 'Austin', 'TX', '78723', 30.2980, -97.7050, 'Lisa Nguyen', '512-555-3005', 'Gate code: 7788. Hard hats required.'),
+    ('b1000000-0000-0000-0000-000000000006', 'c1000000-0000-0000-0000-000000000004', 'Barton Creek Residences', '3100 Barton Creek Blvd', 'Austin', 'TX', '78735', 30.2600, -97.8100, 'Roberto Garza', '512-555-3006', 'Backyard access only, use side gate.'),
+    ('b1000000-0000-0000-0000-000000000007', 'c1000000-0000-0000-0000-000000000005', 'MoPac Interchange Improvement', 'MoPac & Parmer Ln', 'Austin', 'TX', '78759', 30.4400, -97.7400, 'Tom Bradley', '512-555-3007', 'TxDOT project. Flaggers will guide trucks. No weekend pours.'),
+    ('b1000000-0000-0000-0000-000000000008', 'c1000000-0000-0000-0000-000000000005', 'Slaughter Creek Trail Extension', '4900 Slaughter Ln', 'Austin', 'TX', '78749', 30.1950, -97.8200, 'Kevin Park', '512-555-3008', 'Park ranger must escort trucks past trailhead.'),
+    ('b1000000-0000-0000-0000-000000000009', 'c1000000-0000-0000-0000-000000000006', 'South Congress Parking Garage', '1800 S Congress Ave', 'Austin', 'TX', '78704', 30.2450, -97.7490, 'Amanda Phillips', '512-555-3009', NULL),
+    ('b1000000-0000-0000-0000-000000000010', 'c1000000-0000-0000-0000-000000000007', 'Pflugerville Town Center', '100 Town Center Dr', 'Pflugerville', 'TX', '78660', 30.4390, -97.6200, 'Derek Kim', '512-555-3010', 'Gate code: 1234'),
+    ('b1000000-0000-0000-0000-000000000011', 'c1000000-0000-0000-0000-000000000008', 'Cedar Park High School Expansion', '2150 Cypress Creek Rd', 'Cedar Park', 'TX', '78613', 30.5150, -97.8200, 'Rachel Morrison', '512-555-3011', 'School in session — no deliveries before 7:30 AM.'),
+    ('b1000000-0000-0000-0000-000000000012', 'c1000000-0000-0000-0000-000000000009', 'East Riverside Condos', '2400 E Riverside Dr', 'Austin', 'TX', '78741', 30.2350, -97.7200, 'Carlos Mendez', '512-555-3012', 'Enter from Pleasant Valley side.'),
+    ('b1000000-0000-0000-0000-000000000013', 'c1000000-0000-0000-0000-000000000010', 'Bee Cave Office Park', '12900 Bee Cave Pkwy', 'Bee Cave', 'TX', '78738', 30.3080, -97.9400, 'Patricia Hong', '512-555-3013', NULL),
+    ('b1000000-0000-0000-0000-000000000014', 'c1000000-0000-0000-0000-000000000011', 'Kalahari Resort Expansion', '3001 Kalahari Blvd', 'Round Rock', 'TX', '78665', 30.5250, -97.6600, 'Brian Ortiz', '512-555-3014', 'Use delivery entrance off Kalahari Blvd.'),
+    ('b1000000-0000-0000-0000-000000000015', 'c1000000-0000-0000-0000-000000000011', 'Round Rock Premium Outlets Phase 2', '4401 N IH-35', 'Round Rock', 'TX', '78664', 30.5400, -97.6700, 'Samantha Lee', '512-555-3015', 'Concrete must be 4000+ PSI per spec.'),
+    ('b1000000-0000-0000-0000-000000000016', 'c1000000-0000-0000-0000-000000000012', 'Bergstrom Airport Taxiway Rehab', '3600 Presidential Blvd', 'Austin', 'TX', '78719', 30.1945, -97.6699, 'Marcus Johnson', '512-555-3016', 'Airport security escort required. Call 30 min ahead.'),
+    ('b1000000-0000-0000-0000-000000000017', 'c1000000-0000-0000-0000-000000000012', 'Onion Creek Flood Control', '5800 Onion Creek Dr', 'Austin', 'TX', '78744', 30.1700, -97.7500, 'Heather Banks', '512-555-3017', 'No pours during active rain events.'),
+    ('b1000000-0000-0000-0000-000000000018', 'c1000000-0000-0000-0000-000000000013', 'Lakeway Marina Village', '103 Lakeway Dr', 'Lakeway', 'TX', '78734', 30.3600, -97.9800, 'Steve Whitfield', '512-555-3018', 'Weight limit on marina bridge — max 60,000 lbs.'),
+    ('b1000000-0000-0000-0000-000000000019', 'c1000000-0000-0000-0000-000000000014', 'Georgetown Town Square Restoration', '810 Main St', 'Georgetown', 'TX', '78626', 30.6330, -97.6780, 'Ray Dominguez', '512-555-3019', 'Historic district — approach from Austin Ave only.'),
+    ('b1000000-0000-0000-0000-000000000020', 'c1000000-0000-0000-0000-000000000015', 'Mueller Aldrich Park Amphitheater', '4550 Mueller Blvd', 'Austin', 'TX', '78723', 30.2960, -97.7020, 'Tanya Frost', '512-555-3020', NULL),
+    ('b1000000-0000-0000-0000-000000000021', 'c1000000-0000-0000-0000-000000000016', 'Caliterra Subdivision Lots 40-60', '150 Caliterra Trail', 'Dripping Springs', 'TX', '78620', 30.2100, -97.9900, 'Jeff Harding', '512-555-3021', 'Gravel roads — 4WD recommended in wet conditions.'),
+    ('b1000000-0000-0000-0000-000000000022', 'c1000000-0000-0000-0000-000000000017', 'Star Ranch Community Center', '1700 Star Ranch Dr', 'Hutto', 'TX', '78634', 30.5450, -97.5500, 'Nathan Wolfe', '512-555-3022', 'Community entrance off CR 137.'),
+    ('b1000000-0000-0000-0000-000000000023', 'c1000000-0000-0000-0000-000000000018', 'Leander Station TOD', '800 S US-183', 'Leander', 'TX', '78641', 30.5700, -97.8500, 'Maria Vasquez', '512-555-3023', 'Active rail corridor — observe crossing signals.'),
+    ('b1000000-0000-0000-0000-000000000024', 'c1000000-0000-0000-0000-000000000019', 'Barton Creek Square Reno', '2901 S Capital of TX Hwy', 'Austin', 'TX', '78746', 30.2640, -97.8020, 'Chris Davenport', '512-555-3024', 'Deliver to loading dock C on west side.'),
+    ('b1000000-0000-0000-0000-000000000025', 'c1000000-0000-0000-0000-000000000020', 'CR 110 Bridge Replacement', 'CR 110 & San Gabriel River', 'Georgetown', 'TX', '78626', 30.6500, -97.7100, 'Kelly Swanson', '512-555-3025', 'WilCo project. Flaggers on site. Single-lane traffic.');
 
 -- Ingredients
 INSERT INTO ingredients (id, name, category, unit, cost_per_unit) VALUES
@@ -877,12 +928,12 @@ INSERT INTO delivery_history (
 )
 SELECT
     'TKT-H' || LPAD(row_number() OVER()::TEXT, 4, '0'),
-    customer_ids[1 + (i % 10)],
+    customer_ids[1 + (i % 20)],
     plant_ids[1 + (i % 2)],
     truck_ids[1 + (i % 8)],
     driver_ids[1 + (i % 8)],
     mix_ids[1 + (i % 4)],
-    CASE WHEN i % 5 < 5 THEN job_site_ids[1 + (i % 5)] ELSE NULL END,
+    CASE WHEN i % 15 < 15 THEN job_site_ids[1 + (i % 15)] ELSE NULL END,
     volumes[1 + (i % 5)],
     slumps[1 + (i % 4)],
     pour_types[1 + (i % 6)],
@@ -899,12 +950,12 @@ SELECT
 FROM generate_series(0, 329) AS s(i),
 LATERAL (SELECT
     NOW() - INTERVAL '30 days' AS base_date,
-    ARRAY['c1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000002','c1000000-0000-0000-0000-000000000003','c1000000-0000-0000-0000-000000000004','c1000000-0000-0000-0000-000000000005','c1000000-0000-0000-0000-000000000006','c1000000-0000-0000-0000-000000000007','c1000000-0000-0000-0000-000000000008','c1000000-0000-0000-0000-000000000009','c1000000-0000-0000-0000-000000000010']::UUID[] AS customer_ids,
+    ARRAY['c1000000-0000-0000-0000-000000000001','c1000000-0000-0000-0000-000000000002','c1000000-0000-0000-0000-000000000003','c1000000-0000-0000-0000-000000000004','c1000000-0000-0000-0000-000000000005','c1000000-0000-0000-0000-000000000006','c1000000-0000-0000-0000-000000000007','c1000000-0000-0000-0000-000000000008','c1000000-0000-0000-0000-000000000009','c1000000-0000-0000-0000-000000000010','c1000000-0000-0000-0000-000000000011','c1000000-0000-0000-0000-000000000012','c1000000-0000-0000-0000-000000000013','c1000000-0000-0000-0000-000000000014','c1000000-0000-0000-0000-000000000015','c1000000-0000-0000-0000-000000000016','c1000000-0000-0000-0000-000000000017','c1000000-0000-0000-0000-000000000018','c1000000-0000-0000-0000-000000000019','c1000000-0000-0000-0000-000000000020']::UUID[] AS customer_ids,
     ARRAY['a1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000002']::UUID[] AS plant_ids,
     ARRAY['ae000000-0000-0000-0000-000000000001','ae000000-0000-0000-0000-000000000002','ae000000-0000-0000-0000-000000000003','ae000000-0000-0000-0000-000000000004','ae000000-0000-0000-0000-000000000005','ae000000-0000-0000-0000-000000000006','ae000000-0000-0000-0000-000000000007','ae000000-0000-0000-0000-000000000008']::UUID[] AS truck_ids,
     ARRAY['d0000000-0000-0000-0000-000000000001','d0000000-0000-0000-0000-000000000002','d0000000-0000-0000-0000-000000000003','d0000000-0000-0000-0000-000000000004','d0000000-0000-0000-0000-000000000005','d0000000-0000-0000-0000-000000000006','d0000000-0000-0000-0000-000000000007','d0000000-0000-0000-0000-000000000008']::UUID[] AS driver_ids,
     ARRAY['f1000000-0000-0000-0000-000000000001','f1000000-0000-0000-0000-000000000002','f1000000-0000-0000-0000-000000000003','f1000000-0000-0000-0000-000000000004']::UUID[] AS mix_ids,
-    ARRAY['b1000000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000002','b1000000-0000-0000-0000-000000000003','b1000000-0000-0000-0000-000000000004','b1000000-0000-0000-0000-000000000005']::UUID[] AS job_site_ids,
+    ARRAY['b1000000-0000-0000-0000-000000000001','b1000000-0000-0000-0000-000000000002','b1000000-0000-0000-0000-000000000003','b1000000-0000-0000-0000-000000000004','b1000000-0000-0000-0000-000000000005','b1000000-0000-0000-0000-000000000006','b1000000-0000-0000-0000-000000000007','b1000000-0000-0000-0000-000000000008','b1000000-0000-0000-0000-000000000009','b1000000-0000-0000-0000-000000000010','b1000000-0000-0000-0000-000000000011','b1000000-0000-0000-0000-000000000012','b1000000-0000-0000-0000-000000000013','b1000000-0000-0000-0000-000000000014','b1000000-0000-0000-0000-000000000015']::UUID[] AS job_site_ids,
     ARRAY[4.0, 6.0, 8.0, 10.0, 12.0]::NUMERIC[] AS volumes,
     ARRAY[4, 5, 6, 8]::INTEGER[] AS slumps,
     ARRAY['foundation', 'slab', 'wall', 'driveway', 'sidewalk', 'column']::pour_type[] AS pour_types,

@@ -58,7 +58,22 @@ export async function handler() {
         trucksFreed += result.trucksFreed;
       }
 
-      // 3. Handle cancelled orders with trucks still returning
+      // 3. Handle orphan returning trucks (undispatched — no order association)
+      const orphanTrucks = await getOrphanReturningTrucks(plant.plantId);
+      for (const truck of orphanTrucks) {
+        if (truck.estimatedAvailableAt && nowMs >= new Date(truck.estimatedAvailableAt).getTime()) {
+          await freeTruck(truck.truckId, plant, nowIso);
+          // Clear estimatedAvailableAt
+          await ddb.send(new UpdateCommand({
+            TableName: Tables.trucks,
+            Key: { truckId: truck.truckId },
+            UpdateExpression: 'REMOVE estimatedAvailableAt',
+          }));
+          trucksFreed++;
+        }
+      }
+
+      // 4. Handle cancelled orders with trucks still returning
       const cancelledOrders = await getCancelledReturningOrders(plant.plantId);
       for (const order of cancelledOrders) {
         if (!order.cancellation?.estimatedReturnAt) continue;
@@ -264,6 +279,21 @@ async function getCancelledReturningOrders(plantId) {
       ':plantId': plantId,
       ':status': 'cancelled',
       ':false': false,
+    },
+  }));
+  return result.Items ?? [];
+}
+
+async function getOrphanReturningTrucks(plantId) {
+  const result = await ddb.send(new QueryCommand({
+    TableName: Tables.trucks,
+    IndexName: 'plant-status-index',
+    KeyConditionExpression: 'plantId = :plantId AND currentStatus = :st',
+    FilterExpression: 'attribute_not_exists(currentOrderId) OR currentOrderId = :null',
+    ExpressionAttributeValues: {
+      ':plantId': plantId,
+      ':st': 'returning',
+      ':null': null,
     },
   }));
   return result.Items ?? [];

@@ -29,12 +29,14 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 - Storybook — component library documentation
 - Jest + React Testing Library
 
-**Backend** *(Phases 4–6)*
+**Backend**
 - AWS SAM — infrastructure as code
-- AWS Lambda (Node.js ESM) — three microservices: Orders, Fleet, Analytics
-- Amazon DynamoDB — hot operational data (active orders, real-time truck status, event log)
+- AWS Lambda (Node.js 20 ESM, ARM64) — four services: Orders, Fleet, Analytics, Ticker
+- Amazon DynamoDB — hot operational data (active orders, real-time truck status)
 - Amazon Aurora Serverless v2 PostgreSQL — relational master data and delivery history
 - Amazon API Gateway — REST API routing
+- Amazon EventBridge — 1-minute schedule driving the Ticker lifecycle engine
+- Amazon CloudFront + S3 — frontend CDN with custom domain (readymix.earth)
 - Amazon CloudWatch — structured logging, custom metrics, alarms
 
 ---
@@ -55,7 +57,7 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 │  └─ MixDrawer  └─ TruckRoster └─ OrderDrawer  └─ Route lines + popups        │
 │                                                                               │
 │  Data hooks: useMixDesigns · useFleet · useOrders · useDispatchMap · useAnalytics │
-│   (Phase 1–3: mock data  ·  Phase 6: real API calls)            │
+│  Simulation engine: timeline-driven order lifecycle + route interpolation         │
 └─────────────────────────────┬───────────────────────────────────┘
                               │ REST / JSON
                               │ AWS API Gateway
@@ -79,9 +81,13 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 │ Truck    │  │                                                │
 │ Status   │  │  Analytics queries: cycle time trends,         │
 │          │  │  on-time rates, volume by customer             │
-│ Event    │  └────────────────────────────────────────────────┘
-│ Log      │
-└──────────┘
+└──────────┘  └────────────────────────────────────────────────┘
+      ▲
+      │  every 1 min
+┌─────┴──────┐
+│  Ticker    │◄──── EventBridge (1-min schedule)
+│  Lambda    │      Advances order/truck lifecycle
+└────────────┘
       │
       └──────────── CloudWatch (logs · metrics · alarms)
 ```
@@ -103,13 +109,14 @@ Two databases, each matched to its access pattern:
 
 **The lifecycle:** When an order is created, the Lambda validates customer/mix design/plant FKs against Aurora, then writes the active order to DynamoDB. Every status change updates DynamoDB and appends to the event log. On completion, the full record is archived to Aurora's `delivery_history` table (with all FKs intact) and removed from DynamoDB.
 
-### Three Microservices
+### Four Services
 
-| Service | Owns | DynamoDB ops | Aurora ops |
+| Service | Owns | Trigger | Description |
 |---|---|---|---|
-| **Orders** | Delivery tickets | Read/write active orders; append events | Validate FKs; archive to delivery_history; customer search |
-| **Fleet** | Trucks + drivers | Read/write real-time status | Read master truck + driver data; merge with live status |
-| **Analytics** | Reporting | Real-time dispatch state | Volume trends, cycle times, on-time rates (SQL + window functions) |
+| **Orders** | Delivery tickets | API Gateway | CRUD for active orders; FK validation against Aurora; customer search; mix design management |
+| **Fleet** | Trucks + drivers | API Gateway | Real-time truck status reads/writes; merges DynamoDB live status with Aurora master data |
+| **Analytics** | Reporting | API Gateway | Volume trends, cycle times, on-time rates, customer/driver reports (Aurora SQL + window functions) |
+| **Ticker** | Lifecycle engine | EventBridge (1 min) | Advances orders through status phases based on stored timelines; updates truck positions and status |
 
 ---
 
@@ -123,6 +130,7 @@ readymix/
 │   │   ├── AppLayout.tsx                 # AppBar + nav tabs + PlantSelector
 │   │   ├── main.tsx                      # React root; registers AG Grid + AG Charts modules
 │   │   ├── components/
+│   │   │   ├── LiveClock.tsx             # Real-time clock display
 │   │   │   ├── OrderDetailDrawer/        # Order detail side panel + StatusTimeline
 │   │   │   ├── PlantSelector/            # Plant Autocomplete dropdown
 │   │   │   ├── StatusChip/               # Order + truck status badges
@@ -134,26 +142,22 @@ readymix/
 │   │   │   │   ├── cellRenderers/        # NewOrderDialog, orderValidation, columnDefs
 │   │   │   │   └── ...                   # cell renderers: Status, TruckAssignment, Time, HotLoad
 │   │   │   ├── dispatch-map/             # DispatchMapPage (Mapbox map), MapView,
-│   │   │   │   └── ...                   # SidePanel, BottomSheet, AssignTruckDialog, hooks
+│   │   │   │   └── ...                   # SidePanel, BottomSheet, PlantPopup, AssignTruckDialog, hooks
 │   │   │   ├── mixes/                    # MixesPage, MixDesignGrid, MobileMixList,
 │   │   │   │   └── ...                   # MixDesignDetailDrawer, MixDesignFormDialog
 │   │   │   ├── fleet/                    # FleetPage, FleetStatusChart, CycleTimeChart,
 │   │   │   │   └── ...                   # UtilizationChart, TruckRoster, useFleetTicker
-│   │   │   └── analytics/               # AnalyticsPage, KpiCards, VolumeChart,
-│   │   │       └── ...                   # CycleTimeChart, CustomerTable, DriverTable
+│   │   │   ├── analytics/               # AnalyticsPage, KpiCards, VolumeChart,
+│   │   │   │   └── ...                   # CycleTimeChart, CustomerTable, DriverTable
+│   │   │   ├── simulation/              # Timeline-driven order lifecycle engine,
+│   │   │   │   └── ...                   # route geometry interpolation, SimulationContext
+│   │   │   └── timeline/                # TimelineContext provider
 │   │   ├── hooks/
 │   │   │   ├── useOrders.ts              # Active orders data layer
 │   │   │   ├── useMixDesigns.ts          # Mix design CRUD + filtering
 │   │   │   ├── useFleet.ts               # Trucks with live statuses
 │   │   │   ├── useAnalytics.ts           # Cycle time + utilization data
 │   │   │   └── useAnalyticsDashboard.ts  # Dashboard analytics data
-│   │   ├── mocks/                        # Mock fixtures (replaced in Phase 6)
-│   │   │   ├── types.ts                  # Shared TypeScript interfaces
-│   │   │   ├── orders.ts / trucks.ts     # 20 orders, 8 trucks
-│   │   │   ├── customers.ts              # 10 customers with job sites + contacts
-│   │   │   ├── plants.ts / mixDesigns.ts # 2 plants, 4 mix designs
-│   │   │   ├── cycleTimeHistory.ts       # 7-day cycle time trend data
-│   │   │   └── deliveryHistory.ts        # Utilization data by plant
 │   │   └── theme/
 │   │       ├── theme.ts                  # MUI ThemeProvider config
 │   │       └── statusColors.ts           # Status → color/label map (orders + trucks)
@@ -165,19 +169,24 @@ readymix/
 │   ├── samconfig.toml                    # SAM deployment config (fill in after --guided)
 │   ├── package.json                      # Jest config + devDependencies for backend tests
 │   ├── services/
-│   │   ├── orders/                       # GET/POST/PATCH orders; event log; optimistic locking
+│   │   ├── orders/                       # GET/POST/PATCH orders; customer search; mix design CRUD
 │   │   │   ├── index.mjs
 │   │   │   └── index.test.mjs
 │   │   ├── fleet/                        # GET fleet roster; PATCH real-time truck status
 │   │   │   ├── index.mjs
 │   │   │   └── index.test.mjs
-│   │   └── analytics/                    # GET volume, utilization, cycle-times
+│   │   ├── analytics/                    # GET volume, utilization, cycle-times, customer/driver reports
+│   │   │   └── index.mjs
+│   │   └── ticker/                       # EventBridge-triggered lifecycle engine (every 1 min)
 │   │       └── index.mjs
-│   ├── layers/shared/nodejs/             # Shared DynamoDB client, response helpers, canTransition
-│   │   ├── dynamo-client.mjs
-│   │   └── response.mjs
+│   ├── layers/shared/nodejs/             # Shared Lambda layer
+│   │   ├── dynamo-client.mjs             # DynamoDB Document Client + command helpers
+│   │   ├── aurora-client.mjs             # RDS Data API client for Aurora queries
+│   │   └── response.mjs                  # HTTP response helpers
 │   └── scripts/
 │       └── seed-dynamodb.mjs             # Seed all 3 tables with data matching frontend mocks
+├── deploy-aws.sh                          # Full AWS deploy (SAM + S3 + CDN invalidation)
+├── deploy-local.sh                        # Local dev: SAM local + seed + Vite dev server
 ├── database/                             
 │   ├── schema.sql                        # Full Aurora PostgreSQL schema
 │   └── seed.sql                          # Reference data seed
@@ -231,146 +240,34 @@ cd frontend
 npm test           
 ```
 
-### Running locally 
+### Running locally
 
 ```bash
-
-----------------------
-0. Install pre-reqs
-----------------------
-
-brew install awscli
-brew install aws-sam-cli
-brew install libpq
-
-# also add libpq to PATH: 
-echo 'export PATH="/opt/homebrew/opt/libpq/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-             
-
-----------------------
-1. Start databases
-----------------------
-
-# DynamoDB Local
+# Prerequisites: Docker running with DynamoDB Local on :8000
 docker run -d -p 8000:8000 amazon/dynamodb-local
 
-# PostgreSQL (local Aurora stand-in)
-docker run -d --name readymix-pg \
-  -e POSTGRES_USER=readymix_admin \
-  -e POSTGRES_PASSWORD=localdev123 \
-  -e POSTGRES_DB=readymix \
-  -p 5432:5432 postgres:15
+# Start everything (SAM build + seed + backend on :3001 + frontend on :3000)
+./deploy-local.sh
 
-----------------------
-2. Load data
-----------------------
-
-# Aurora schema + seed data
-psql postgresql://readymix_admin:localdev123@localhost:5432/readymix \
-  -f database/schema.sql
-
-# Optiona: if there's an issue with Aurora, drop and recreate. Then re-seed data using above command
-psql postgresql://readymix_admin:localdev123@localhost:5432/postgres \
-  -c "DROP DATABASE readymix;" -c "CREATE DATABASE readymix;"
-
-# DynamoDB seed (after SAM local is running or tables exist)
-cd backend/scripts && node seed-dynamodb.mjs
-
----------------------------
-3. Create backend/env.json
----------------------------
-{
-  "OrdersFunction": {
-    "ORDERS_TABLE": "readymix-orders-dev",
-    "TRUCKS_TABLE": "readymix-trucks-dev",
-    "PLANTS_TABLE": "readymix-plants-dev",
-    "AWS_ENDPOINT_URL": "http://host.docker.internal:8000"
-  },
-  "FleetFunction": {
-    "ORDERS_TABLE": "readymix-orders-dev",
-    "TRUCKS_TABLE": "readymix-trucks-dev",
-    "PLANTS_TABLE": "readymix-plants-dev",
-    "AWS_ENDPOINT_URL": "http://host.docker.internal:8000"
-  },
-  "AnalyticsFunction": {
-    "USE_LOCAL_PG": "true",
-    "PG_CONNECTION_STRING": "postgresql://readymix_admin:localdev123@host.docker.internal:5432/readymix"
-  }
-}
-
-----------------------
-4. Start backend
-----------------------
-
-cd backend
-sam build
-sam local start-api --port 3001 --env-vars env.json --warm-containers EAGER
-
-----------------------
-5. Start frontend
-----------------------
-
-cd frontend
-npm install
-# Create .env.local pointing to local API + Mapbox token:
-echo "VITE_API_URL=http://localhost:3001" > .env.local
-echo "VITE_MAPBOX_TOKEN=pk.your_mapbox_token_here" >> .env.local
-npm run dev    # http://localhost:3000
-
--------------------------------
-6. When finished --- Tear down
--------------------------------
-
-# Stop SAM local API (Ctrl+C in its terminal), then:
-
-# Stop and remove database containers
-docker stop readymix-pg && docker rm readymix-pg
-docker stop $(docker ps -q --filter ancestor=amazon/dynamodb-local) && \
-docker rm $(docker ps -aq --filter ancestor=amazon/dynamodb-local)
-
-# Optional: remove images to free disk space
-docker rmi postgres:15 amazon/dynamodb-local
+# Options
+./deploy-local.sh --skip-seed   # Skip re-seeding DynamoDB
+./deploy-local.sh --seed-only   # Just re-seed and exit
+./deploy-local.sh --ticker      # Invoke the ticker Lambda once
 ```
 
-### Backend Build and Deploy
+### Deploy to AWS
 
 ```bash
+# Full deploy (backend + frontend + CDN invalidation)
+./deploy-aws.sh
 
-sam build && sam deploy
+# Deploy + fresh seed data
+./deploy-aws.sh --seed --clear
 
+# Backend only / Frontend only
+./deploy-aws.sh --skip-frontend
+./deploy-aws.sh --skip-backend
 ```
-
-
-### Frontend Build and Deploy
-
-```bash 
-
-cd frontend && npm run build
-
-BUCKET=$(aws cloudformation describe-stacks \
-  --stack-name readymix-dashboard \
-  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
-  --output text)
-
-aws s3 sync dist/ s3://$BUCKET --delete
-
-# CloudFront cache invalidation
-DIST_ID=$(aws cloudformation describe-stacks \
-  --stack-name readymix-dashboard \
-  --query "Stacks[0].Outputs[?OutputKey=='FrontendDistributionId'].OutputValue" \
-  --output text)
-
-aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*"
-
-# Get CloudFront URL
-aws cloudformation describe-stacks \
-  --stack-name readymix-dashboard \
-  --query "Stacks[0].Outputs[?OutputKey=='FrontendUrl'].OutputValue" \
-  --output text
-
-  ```
 
 
 ---

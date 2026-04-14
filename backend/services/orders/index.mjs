@@ -363,8 +363,8 @@ async function updateOrder(event) {
     };
   }
 
-  // ── Unscheduling (scheduled -> pending) ─────────────────────────────────
-  if (body.status === 'pending' && current.status === 'scheduled') {
+  // ── Undispatching (scheduled/dispatched/in_transit/pouring -> pending) ───
+  if (body.status === 'pending' && ['scheduled', 'dispatched', 'in_transit', 'pouring'].includes(current.status)) {
     setClauses.push('assignedTruckId = :null, assignedTruckNumber = :null, driverName = :null');
     setClauses.push('timeline = :null, routeData = :null');
     exprValues[':null'] = null;
@@ -484,12 +484,35 @@ async function updateOrder(event) {
             ':lat': plantData?.latitude ?? null, ':lng': plantData?.longitude ?? null,
           },
         }));
-      } else if (body.status === 'pending' && current.status === 'scheduled') {
-        // Unscheduling — free truck
+      } else if (body.status === 'pending' && ['scheduled', 'dispatched'].includes(current.status)) {
+        // Undispatching from plant — free truck immediately
         await ddb.send(new UpdateCommand({
           TableName: Tables.trucks, Key: { truckId: current.assignedTruckId },
           UpdateExpression: 'SET currentStatus = :st, currentOrderId = :null, currentJobSite = :null, lastUpdated = :now',
           ExpressionAttributeValues: { ':st': 'available', ':null': null, ':now': now },
+        }));
+      } else if (body.status === 'pending' && ['in_transit', 'pouring'].includes(current.status)) {
+        // Undispatching while truck is away — truck must return
+        let estimatedAvailableAt;
+        if (current.status === 'in_transit' && current.timeline) {
+          // Mid-transit: proportional return time
+          const tl = current.timeline;
+          const transitStartMs = new Date(tl.loadingCompletesAt).getTime();
+          const transitEndMs   = new Date(tl.transitArrivalAt).getTime();
+          const transitTotal   = transitEndMs - transitStartMs;
+          const elapsed        = Math.min(Date.now() - transitStartMs, transitTotal);
+          const fraction       = transitTotal > 0 ? elapsed / transitTotal : 0;
+          const returnTimeMs   = fraction * (current.routeData?.durationSeconds ?? 0) * 1000;
+          estimatedAvailableAt = new Date(Date.now() + returnTimeMs).toISOString();
+        } else {
+          // Pouring: full return trip
+          const returnTimeMs = (current.routeData?.durationSeconds ?? 0) * 1000;
+          estimatedAvailableAt = new Date(Date.now() + returnTimeMs).toISOString();
+        }
+        await ddb.send(new UpdateCommand({
+          TableName: Tables.trucks, Key: { truckId: current.assignedTruckId },
+          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :null, currentJobSite = :null, lastUpdated = :now, estimatedAvailableAt = :eta',
+          ExpressionAttributeValues: { ':st': 'returning', ':null': null, ':now': now, ':eta': estimatedAvailableAt },
         }));
       } else if (body.status === 'cancelled') {
         if (['scheduled', 'dispatched'].includes(current.status)) {

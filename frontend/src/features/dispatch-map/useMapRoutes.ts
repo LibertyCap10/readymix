@@ -30,6 +30,9 @@ export function useMapRoutes(
       o.jobSiteLatitude != null && o.jobSiteLongitude != null,
   );
 
+  // Stable key for the current set of route-worthy orders
+  const routeKey = routeOrders.map(o => o.ticketNumber).sort().join(',');
+
   useEffect(() => {
     if (!MAPBOX_TOKEN || !plant.latitude || !plant.longitude) return;
 
@@ -67,14 +70,15 @@ export function useMapRoutes(
       }
 
       if (!cancelled) {
-        setRoutes(prev => ({ ...prev, ...newRoutes }));
+        // Replace (not merge) so stale routes from other dates are dropped
+        setRoutes(newRoutes);
       }
     }
 
     fetchRoutes();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeOrders.map(o => o.ticketNumber).join(','), plant.plantId]);
+  }, [routeKey, plant.plantId]);
 
   return routes;
 }

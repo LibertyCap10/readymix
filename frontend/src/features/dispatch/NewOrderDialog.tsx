@@ -231,6 +231,44 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  async function handleAutofill() {
+    const customer = customerOptions[Math.floor(Math.random() * customerOptions.length)];
+    if (!customer) return;
+    setSelectedCustomer(customer);
+
+    let site: { siteId: string; name: string; address: string; city: string; state: string } | undefined;
+    try {
+      const data = await api.get<{ jobSites: Array<{ siteId: string; name: string; address: string; city: string; state: string }> }>(
+        `/customers/${customer.id}/job-sites`,
+      );
+      site = data.jobSites[Math.floor(Math.random() * data.jobSites.length)];
+    } catch { /* leave site undefined */ }
+
+    const mix = mixDesigns[Math.floor(Math.random() * mixDesigns.length)];
+    const volume = (Math.floor(Math.random() * 19) + 2) / 2; // 1.0–10.0
+    const slumpMid = mix ? (mix.slumpMin + mix.slumpMax) / 2 : 4;
+    const pourType = POUR_TYPES[Math.floor(Math.random() * POUR_TYPES.length)].value;
+    const hoursAhead = 1 + Math.floor(Math.random() * 4);
+    const requestedTime = dayjs().add(hoursAhead, 'hour').startOf('minute');
+
+    setForm({
+      customerId: customer.id,
+      customerName: customer.name,
+      jobSiteId: site?.siteId ?? '',
+      jobSiteName: site?.name ?? '',
+      jobSiteAddress: site ? `${site.address}, ${site.city}, ${site.state}` : '',
+      mixDesignId: mix?.mixDesignId ?? '',
+      mixDesignName: mix?.name ?? '',
+      psi: mix?.psi ?? 0,
+      volume: String(volume),
+      slump: String(slumpMid),
+      pourType,
+      requestedTime,
+      isHotLoad: Math.random() < 0.15,
+      notes: '',
+    });
+  }
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 700 }}>New Delivery Order</DialogTitle>
@@ -476,6 +514,9 @@ export function NewOrderDialog({ open, onClose, onSubmit }: NewOrderDialogProps)
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={handleAutofill} color="info" sx={{ mr: 'auto' }}>
+          Autofill
+        </Button>
         <Button onClick={onClose} color="inherit">Cancel</Button>
         <Button onClick={handleSubmit} variant="contained" color="secondary">
           Create Order

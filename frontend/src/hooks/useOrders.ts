@@ -18,9 +18,9 @@ import dayjs from 'dayjs';
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending:    ['scheduled', 'cancelled'],
   scheduled:  ['dispatched', 'pending', 'cancelled'],
-  dispatched: ['in_transit', 'cancelled'],
-  in_transit: ['pouring', 'cancelled'],
-  pouring:    ['returning', 'cancelled'],
+  dispatched: ['in_transit', 'pending', 'cancelled'],
+  in_transit: ['pouring', 'pending', 'cancelled'],
+  pouring:    ['returning', 'pending', 'cancelled'],
   returning:  ['complete'],
   complete:   [],
   cancelled:  [],
