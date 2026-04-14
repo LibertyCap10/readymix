@@ -7,7 +7,6 @@ import {
   Tab,
   Tabs,
   Toolbar,
-  Typography,
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -19,6 +18,7 @@ import MapIcon from '@mui/icons-material/Map';
 import { PlantSelector } from './components/PlantSelector';
 import { LiveClock } from './components/LiveClock';
 import { usePlant } from './context/PlantContext';
+import Logo from './components/Logo';
 
 const navItems = [
   { label: 'Mixes', path: '/mixes', icon: <ScienceIcon /> },
@@ -41,13 +41,10 @@ export default function AppLayout() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <AppBar position="sticky">
         <Toolbar sx={{ gap: 1, minHeight: { xs: 48, md: 64 } }}>
-          <Typography
-            variant="h6"
+          <Logo
             onClick={() => navigate('/')}
-            sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: { xs: '1rem', md: '1.25rem' }, cursor: 'pointer' }}
-          >
-            ReadyMix
-          </Typography>
+            size={isMobile ? 'sm' : 'md'}
+          />
 
           {/* Desktop: tabs in header */}
           {!isMobile && (
