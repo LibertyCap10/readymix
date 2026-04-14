@@ -29,6 +29,7 @@ export default function Logo({ onClick, variant = 'light', size = 'md' }: LogoPr
           letterSpacing: '-0.02em',
           whiteSpace: 'nowrap',
           color: isLight ? 'white' : 'primary.main',
+          textShadow: isLight ? '0 1px 4px rgba(0,0,0,0.5)' : 'none',
         }}
       >
         Ready

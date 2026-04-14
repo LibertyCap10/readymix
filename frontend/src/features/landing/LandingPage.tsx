@@ -6,6 +6,7 @@ import {
   Button,
   Chip,
   Container,
+  IconButton,
   Paper,
   Toolbar,
   Typography,
@@ -25,6 +26,7 @@ import CloudIcon from '@mui/icons-material/Cloud';
 import HubIcon from '@mui/icons-material/Hub';
 import StorageIcon from '@mui/icons-material/Storage';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import DemoMap from './DemoMap';
 import Logo from '../../components/Logo';
 
@@ -46,6 +48,29 @@ function useReveal() {
   }, []);
 
   return { ref, visible };
+}
+
+/* ── Count-up hook ──────────────────────────────────────────────────── */
+
+function useCountUp(target: number, visible: boolean, duration = 1200) {
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!visible) return;
+    let start: number | null = null;
+    let raf: number;
+    const step = (ts: number) => {
+      if (start === null) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(eased * target));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [visible, target, duration]);
+
+  return value;
 }
 
 /* ── Data ────────────────────────────────────────────────────────────── */
@@ -87,10 +112,10 @@ const archNodes = [
 ];
 
 const scalabilityStats = [
-  { value: '4', label: 'Lambda Functions' },
-  { value: '3', label: 'DynamoDB Tables' },
+  { value: '4', label: 'Lambda Functions', numeric: 4 },
+  { value: '3', label: 'DynamoDB Tables', numeric: 3 },
   { value: '1 min', label: 'Lifecycle Tick' },
-  { value: '0', label: 'Servers to Manage' },
+  { value: '0', label: 'Servers to Manage', numeric: 0 },
 ];
 
 /* ── Section wrapper ────────────────────────────────────────────────── */
@@ -129,6 +154,13 @@ export default function LandingPage() {
   const featuresReveal = useReveal();
   const archReveal = useReveal();
 
+  const countValues = [
+    useCountUp(4, archReveal.visible),
+    useCountUp(3, archReveal.visible),
+    useCountUp(0, archReveal.visible), // placeholder — "1 min" won't use this
+    useCountUp(0, archReveal.visible),
+  ];
+
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -157,6 +189,21 @@ export default function LandingPage() {
         <Toolbar sx={{ minHeight: { xs: 48, md: 64 } }}>
           <Logo size={isMobile ? 'sm' : 'md'} />
           <Box sx={{ flexGrow: 1 }} />
+          <IconButton
+            component="a"
+            href="https://github.com/LibertyCap10/readymix"
+            target="_blank"
+            rel="noopener noreferrer"
+            color="inherit"
+            sx={{
+              mr: 1.5,
+              opacity: 0.8,
+              transition: 'opacity 0.2s',
+              '&:hover': { opacity: 1, bgcolor: 'rgba(255,255,255,0.08)' },
+            }}
+          >
+            <GitHubIcon />
+          </IconButton>
           <Button
             variant="outlined"
             color="inherit"
@@ -177,9 +224,33 @@ export default function LandingPage() {
           textAlign: 'center',
           px: 3,
           pt: 8,
+          /* Dot grid pattern */
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+            pointerEvents: 'none',
+          },
         }}
       >
-        <Box>
+        <Box sx={{
+          position: 'relative',
+          zIndex: 1,
+          /* Radial glow accent */
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '120%',
+            height: '80%',
+            background: 'radial-gradient(ellipse at center, rgba(255,109,0,0.08) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          },
+        }}>
           <Typography
             variant={isMobile ? 'h3' : 'h2'}
             sx={{ fontWeight: 800, mb: 2, letterSpacing: '-0.02em' }}
@@ -207,7 +278,11 @@ export default function LandingPage() {
             color="secondary"
             size="large"
             onClick={() => navigate('/orders')}
-            sx={{ px: 5, py: 1.5, fontSize: '1.1rem', fontWeight: 600, borderRadius: 2 }}
+            sx={{
+              px: 5, py: 1.5, fontSize: '1.1rem', fontWeight: 600, borderRadius: 2,
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 4px 20px rgba(255,109,0,0.4)' },
+            }}
           >
             View Live Demo &rarr;
           </Button>
@@ -295,7 +370,11 @@ export default function LandingPage() {
             color="secondary"
             size="large"
             onClick={() => navigate('/dispatch')}
-            sx={{ px: 4, py: 1.5, fontWeight: 600, borderRadius: 2 }}
+            sx={{
+              px: 4, py: 1.5, fontWeight: 600, borderRadius: 2,
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: '0 4px 20px rgba(255,109,0,0.4)' },
+            }}
           >
             Explore the Map &rarr;
           </Button>
@@ -325,19 +404,20 @@ export default function LandingPage() {
                 <Paper
                   elevation={0}
                   sx={{
-                    border: '1px solid',
-                    borderColor: 'divider',
+                    background: 'linear-gradient(#fff, #fff) padding-box, linear-gradient(180deg, rgba(255,109,0,0.25) 0%, rgba(0,0,0,0.06) 100%) border-box',
+                    border: '1px solid transparent',
                     borderRadius: 3,
                     p: 4,
                     textAlign: 'center',
                     height: '100%',
                     opacity: featuresReveal.visible ? 1 : 0,
                     transform: featuresReveal.visible ? 'none' : 'translateY(40px)',
-                    transition: `opacity 0.6s ${i * 0.1}s, transform 0.6s ${i * 0.1}s`,
+                    transition: `opacity 0.6s ${i * 0.1}s, transform 0.6s ${i * 0.1}s, box-shadow 0.2s, background 0.3s`,
                     '&:hover': {
                       boxShadow: 4,
                       transform: 'translateY(-4px)',
-                      transition: 'box-shadow 0.2s, transform 0.2s',
+                      background: 'linear-gradient(#fff, #fff) padding-box, linear-gradient(180deg, rgba(255,109,0,0.5) 0%, rgba(255,109,0,0.1) 100%) border-box',
+                      transition: 'box-shadow 0.2s, transform 0.2s, background 0.3s',
                     },
                   }}
                 >
@@ -356,8 +436,24 @@ export default function LandingPage() {
       </Section>
 
       {/* ─── 4. ARCHITECTURE ─────────────────────────────────────────── */}
-      <Section sx={{ bgcolor: 'primary.dark', color: 'white', py: { xs: 8, md: 0 } }}>
-        <Container maxWidth="lg" ref={archReveal.ref}>
+      <Section sx={{
+        bgcolor: 'primary.dark',
+        color: 'white',
+        py: { xs: 8, md: 0 },
+        /* Radial glow accent */
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: '30%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '80%',
+          height: '60%',
+          background: 'radial-gradient(ellipse at center, rgba(255,109,0,0.06) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        },
+      }}>
+        <Container maxWidth="lg" ref={archReveal.ref} sx={{ position: 'relative', zIndex: 1 }}>
           <Typography
             variant="h3"
             sx={{
@@ -502,7 +598,9 @@ export default function LandingPage() {
                     variant="h2"
                     sx={{ fontWeight: 800, color: 'secondary.main', lineHeight: 1 }}
                   >
-                    {stat.value}
+                    {stat.numeric !== undefined
+                      ? countValues[i]
+                      : stat.value}
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 1 }}>
                     {stat.label}
@@ -546,7 +644,8 @@ export default function LandingPage() {
               fontSize: '1.1rem',
               fontWeight: 700,
               borderRadius: 2,
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.92)' },
+              transition: 'transform 0.2s, box-shadow 0.2s, background-color 0.2s',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.92)', transform: 'translateY(-2px)', boxShadow: '0 4px 20px rgba(255,255,255,0.3)' },
             }}
           >
             View Live Demo &rarr;
