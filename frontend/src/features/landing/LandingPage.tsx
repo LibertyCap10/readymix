@@ -286,7 +286,7 @@ export default function LandingPage() {
             variant="body1"
             sx={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, mb: 4, maxWidth: 400 }}
           >
-            Watch trucks travel from the Austin branch plant to job sites across
+            Watch trucks travel from the branch plant to job sites across
             the metro area. Routes, positions, and ETAs update in real time —
             powered by Mapbox GL and EventBridge.
           </Typography>
