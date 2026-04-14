@@ -76,7 +76,8 @@ export const Tables = {
 // in code review.
 
 const VALID_TRANSITIONS = {
-  pending:    ['dispatched', 'cancelled'],
+  pending:    ['scheduled', 'cancelled'],
+  scheduled:  ['dispatched', 'pending', 'cancelled'],
   dispatched: ['in_transit', 'cancelled'],
   in_transit: ['pouring', 'cancelled'],
   pouring:    ['returning', 'cancelled'],
@@ -90,3 +91,42 @@ export function canTransition(fromStatus, toStatus) {
 }
 
 export const VALID_STATUSES = Object.keys(VALID_TRANSITIONS);
+
+// ─── Timeline duration constants ─────────────────────────────────────────
+// Used by the dispatch endpoint and ticker Lambda to compute delivery phases.
+
+export const TIMELINE = {
+  loadingDurationMs:  7 * 60 * 1000,       // 7 minutes at plant
+  pourRateMsPerYard:  10 * 60 * 1000,      // 10 minutes per cubic yard
+  minPourDurationMs:  5 * 60 * 1000,       // 5 minute floor
+};
+
+/**
+ * Compute the full delivery timeline for an order being dispatched.
+ *
+ * @param {string} departureAt - ISO timestamp when truck leaves plant
+ * @param {number} routeDurationSeconds - Mapbox driving estimate in seconds
+ * @param {number} volumeYards - order volume in cubic yards
+ * @returns {object} timeline with all phase boundary timestamps
+ */
+export function computeTimeline(departureAt, routeDurationSeconds, volumeYards) {
+  const departure = new Date(departureAt).getTime();
+  const loadingMs = TIMELINE.loadingDurationMs;
+  const transitMs = routeDurationSeconds * 1000;
+  const pourMs    = Math.max(TIMELINE.minPourDurationMs, volumeYards * TIMELINE.pourRateMsPerYard);
+
+  const loadingCompletesAt  = departure + loadingMs;
+  const transitArrivalAt    = loadingCompletesAt + transitMs;
+  const pourCompletesAt     = transitArrivalAt + pourMs;
+  const returnDepartureAt   = pourCompletesAt;
+  const returnArrivalAt     = returnDepartureAt + transitMs;
+
+  return {
+    scheduledDepartureAt: new Date(departure).toISOString(),
+    loadingCompletesAt:   new Date(loadingCompletesAt).toISOString(),
+    transitArrivalAt:     new Date(transitArrivalAt).toISOString(),
+    pourCompletesAt:      new Date(pourCompletesAt).toISOString(),
+    returnDepartureAt:    new Date(returnDepartureAt).toISOString(),
+    returnArrivalAt:      new Date(returnArrivalAt).toISOString(),
+  };
+}

@@ -22,10 +22,14 @@ import {
   Stack,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import PlaceIcon from '@mui/icons-material/Place';
 import PersonIcon from '@mui/icons-material/Person';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs from 'dayjs';
 import type { Order } from '@/types/domain';
 import { POUR_TYPE_LABELS } from '@/types/domain';
@@ -44,6 +48,7 @@ interface OrderDetailDrawerProps {
   order: Order | null;
   open: boolean;
   onClose: () => void;
+  onUpdateRequestedTime?: (ticketNumber: string, newTime: string) => Promise<void>;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -74,9 +79,11 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function OrderDetailDrawer({ order, open, onClose }: OrderDetailDrawerProps) {
+export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime }: OrderDetailDrawerProps) {
   const [mixDetail, setMixDetail] = useState<MixDesignDetail | null>(null);
   const [mixLoading, setMixLoading] = useState(false);
+  const [editingTime, setEditingTime] = useState(false);
+  const [editTimeValue, setEditTimeValue] = useState<dayjs.Dayjs | null>(null);
 
   useEffect(() => {
     if (!open || !order?.mixDesignId) {
@@ -172,7 +179,57 @@ export function OrderDetailDrawer({ order, open, onClose }: OrderDetailDrawerPro
 
           {/* ── Order Details ───────────────────────────────────────── */}
           <SectionHeader>Order Details</SectionHeader>
-          <DetailRow label="Requested Time" value={dayjs(order.requestedTime).format('ddd, MMM D · h:mm A')} />
+          {order.status === 'pending' && onUpdateRequestedTime && editingTime ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+                Requested Time
+              </Typography>
+              <DateTimePicker
+                value={editTimeValue}
+                onChange={(v) => setEditTimeValue(v)}
+                minDateTime={dayjs().subtract(5, 'minute')}
+                slotProps={{ textField: { size: 'small', sx: { flex: 1 } } }}
+              />
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={async () => {
+                  if (editTimeValue) {
+                    await onUpdateRequestedTime(order.ticketNumber, editTimeValue.toISOString());
+                  }
+                  setEditingTime(false);
+                }}
+              >
+                <CheckIcon fontSize="small" />
+              </IconButton>
+              <IconButton size="small" onClick={() => setEditingTime(false)}>
+                <CloseRoundedIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', py: 0.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
+                Requested Time
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {dayjs(order.requestedTime).format('ddd, MMM D · h:mm A')}
+                </Typography>
+                {order.status === 'pending' && onUpdateRequestedTime && (
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setEditTimeValue(dayjs(order.requestedTime));
+                      setEditingTime(true);
+                    }}
+                    sx={{ p: 0.25 }}
+                  >
+                    <EditIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                )}
+              </Box>
+            </Box>
+          )}
           <DetailRow label="Volume" value={`${order.volume} yd³`} />
           <DetailRow label="Slump" value={`${order.slump}"`} />
           <DetailRow label="Pour Type" value={POUR_TYPE_LABELS[order.pourType]} />

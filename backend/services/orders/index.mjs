@@ -26,6 +26,8 @@ import {
   Tables,
   canTransition,
   VALID_STATUSES,
+  computeTimeline,
+  TIMELINE,
 } from '/opt/nodejs/dynamo-client.mjs';
 
 // Lazy import to avoid module-load failures when Aurora isn't configured
@@ -320,7 +322,7 @@ async function updateOrder(event) {
   // ── Build update expression ───────────────────────────────────────────
   const now             = new Date().toISOString();
   const setClauses      = ['updatedAt = :updatedAt'];
-  const exprValues      = { ':updatedAt': now, ':currentStatus': current.status };
+  const exprValues      = { ':updatedAt': now };
   const exprNames       = {};
 
   if (body.status != null) {
@@ -338,6 +340,67 @@ async function updateOrder(event) {
     exprValues[':newEvent'] = [newEvent];
   }
 
+  // ── Timeline computation on scheduling ───────────────────────────────────
+  // When scheduling, work backward from requestedTime so concrete arrives on time:
+  //   scheduledDepartureAt = requestedTime - loadingDuration - transitDuration
+  if (body.status === 'scheduled' && body.routeData) {
+    const transitMs = body.routeData.durationSeconds * 1000;
+    const departureMs = new Date(current.requestedTime).getTime() - TIMELINE.loadingDurationMs - transitMs;
+    const departureAt = new Date(departureMs).toISOString();
+    const timeline = computeTimeline(
+      departureAt,
+      body.routeData.durationSeconds,
+      current.volume,
+    );
+    setClauses.push('timeline = :timeline');
+    exprValues[':timeline'] = timeline;
+
+    setClauses.push('routeData = :routeData');
+    exprValues[':routeData'] = {
+      coordinates:    body.routeData.coordinates,
+      distanceMeters: body.routeData.distanceMeters,
+      durationSeconds: body.routeData.durationSeconds,
+    };
+  }
+
+  // ── Unscheduling (scheduled -> pending) ─────────────────────────────────
+  if (body.status === 'pending' && current.status === 'scheduled') {
+    setClauses.push('assignedTruckId = :null, assignedTruckNumber = :null, driverName = :null');
+    setClauses.push('timeline = :null, routeData = :null');
+    exprValues[':null'] = null;
+  }
+
+  // ── Cancellation return logic ─────────────────────────────────────────
+  if (body.status === 'cancelled') {
+    const cancelledAt = now;
+    const cancellation = { cancelledAt };
+
+    if (current.status === 'scheduled' || current.status === 'dispatched') {
+      // Not yet departed or still loading — no return needed, truck freed immediately
+      // (truck update handled below)
+    } else if (current.timeline && current.status === 'in_transit') {
+      // Mid-transit: compute fraction traveled, proportional return time
+      const tl = current.timeline;
+      const nowMs = Date.now();
+      const transitStartMs = new Date(tl.loadingCompletesAt).getTime();
+      const transitEndMs   = new Date(tl.transitArrivalAt).getTime();
+      const transitTotal   = transitEndMs - transitStartMs;
+      const elapsed        = Math.min(nowMs - transitStartMs, transitTotal);
+      const fraction       = transitTotal > 0 ? elapsed / transitTotal : 0;
+      const returnTimeMs   = fraction * (current.routeData?.durationSeconds ?? 0) * 1000;
+      cancellation.estimatedReturnAt = new Date(nowMs + returnTimeMs).toISOString();
+      cancellation.positionAtCancel = [fraction]; // fraction for frontend interpolation
+    } else if (current.status === 'pouring') {
+      // At job site — full return trip
+      const returnTimeMs = (current.routeData?.durationSeconds ?? 0) * 1000;
+      cancellation.estimatedReturnAt = new Date(nowMs + returnTimeMs).toISOString();
+    }
+    // returning status — already heading back, just mark cancelled
+
+    setClauses.push('cancellation = :cancellation');
+    exprValues[':cancellation'] = cancellation;
+  }
+
   if (body.assignedTruckId != null) {
     setClauses.push('assignedTruckId = :truckId, assignedTruckNumber = :truckNumber, driverName = :driverName');
     exprValues[':truckId']     = body.assignedTruckId;
@@ -350,12 +413,30 @@ async function updateOrder(event) {
     exprValues[':notes'] = body.notes;
   }
 
+  // ── RequestedTime editing (only allowed for pending orders) ──────────
+  if (body.requestedTime != null && body.status == null) {
+    if (current.status !== 'pending') {
+      return conflict('requestedTime can only be changed when order is pending');
+    }
+    const newDate = new Date(body.requestedTime);
+    if (isNaN(newDate.getTime())) {
+      return badRequest('requestedTime must be a valid ISO 8601 datetime');
+    }
+    if (newDate.getTime() < Date.now() - 5 * 60 * 1000) {
+      return badRequest('requestedTime cannot be set to the past');
+    }
+    setClauses.push('requestedTime = :reqTime');
+    exprValues[':reqTime'] = body.requestedTime;
+  }
+
   // Optimistic lock: only update if status hasn't changed since we fetched
-  const conditionExpression = body.status != null
-    ? '#st = :currentStatus'
-    : 'attribute_exists(plantId)';
+  let conditionExpression;
   if (body.status != null) {
+    conditionExpression = '#st = :currentStatus';
+    exprValues[':currentStatus'] = current.status;
     exprNames['#st'] = 'status';
+  } else {
+    conditionExpression = 'attribute_exists(plantId)';
   }
 
   await ddb.send(new UpdateCommand({
@@ -366,6 +447,72 @@ async function updateOrder(event) {
     ExpressionAttributeValues: exprValues,
     ...(Object.keys(exprNames).length > 0 && { ExpressionAttributeNames: exprNames }),
   }));
+
+  // ── Truck status side-effects ────────────────────────────────────────────
+  const truckId = body.assignedTruckId ?? current.assignedTruckId;
+  if (truckId && body.status != null) {
+    try {
+      if (body.status === 'scheduled') {
+        // Reserve truck for future departure — stays at plant
+        const plantResult = await ddb.send(new GetCommand({
+          TableName: Tables.plants, Key: { plantId },
+        }));
+        const plantData = plantResult.Item;
+        await ddb.send(new UpdateCommand({
+          TableName: Tables.trucks,
+          Key: { truckId },
+          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :oid, currentJobSite = :js, lastUpdated = :now, latitude = :lat, longitude = :lng',
+          ExpressionAttributeValues: {
+            ':st': 'scheduled', ':oid': current.ticketNumber,
+            ':js': current.jobSiteName, ':now': now,
+            ':lat': plantData?.latitude ?? null, ':lng': plantData?.longitude ?? null,
+          },
+        }));
+      } else if (body.status === 'dispatched') {
+        // Truck begins loading at plant
+        const plantResult = await ddb.send(new GetCommand({
+          TableName: Tables.plants, Key: { plantId },
+        }));
+        const plantData = plantResult.Item;
+        await ddb.send(new UpdateCommand({
+          TableName: Tables.trucks,
+          Key: { truckId },
+          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :oid, currentJobSite = :js, lastUpdated = :now, latitude = :lat, longitude = :lng',
+          ExpressionAttributeValues: {
+            ':st': 'loading', ':oid': current.ticketNumber,
+            ':js': current.jobSiteName, ':now': now,
+            ':lat': plantData?.latitude ?? null, ':lng': plantData?.longitude ?? null,
+          },
+        }));
+      } else if (body.status === 'pending' && current.status === 'scheduled') {
+        // Unscheduling — free truck
+        await ddb.send(new UpdateCommand({
+          TableName: Tables.trucks, Key: { truckId: current.assignedTruckId },
+          UpdateExpression: 'SET currentStatus = :st, currentOrderId = :null, currentJobSite = :null, lastUpdated = :now',
+          ExpressionAttributeValues: { ':st': 'available', ':null': null, ':now': now },
+        }));
+      } else if (body.status === 'cancelled') {
+        if (['scheduled', 'dispatched'].includes(current.status)) {
+          // Not yet departed or still loading — free truck immediately
+          await ddb.send(new UpdateCommand({
+            TableName: Tables.trucks, Key: { truckId },
+            UpdateExpression: 'SET currentStatus = :st, currentOrderId = :null, currentJobSite = :null, lastUpdated = :now',
+            ExpressionAttributeValues: { ':st': 'available', ':null': null, ':now': now },
+          }));
+        } else if (['in_transit', 'pouring'].includes(current.status)) {
+          // Truck needs to return — set to returning
+          await ddb.send(new UpdateCommand({
+            TableName: Tables.trucks, Key: { truckId },
+            UpdateExpression: 'SET currentStatus = :st, lastUpdated = :now',
+            ExpressionAttributeValues: { ':st': 'returning', ':now': now },
+          }));
+        }
+      }
+    } catch (truckErr) {
+      console.error('Failed to update truck status:', truckErr);
+      // Non-fatal: order update succeeded, truck will be corrected by ticker
+    }
+  }
 
   // Return the updated order by re-fetching (ensures response reflects DB state)
   const updated = await ddb.send(new GetCommand({
@@ -380,7 +527,8 @@ async function updateOrder(event) {
 
 function getValidNext(status) {
   const map = {
-    pending:    ['dispatched', 'cancelled'],
+    pending:    ['scheduled', 'cancelled'],
+    scheduled:  ['dispatched', 'pending', 'cancelled'],
     dispatched: ['in_transit', 'cancelled'],
     in_transit: ['pouring', 'cancelled'],
     pouring:    ['returning', 'cancelled'],

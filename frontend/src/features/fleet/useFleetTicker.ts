@@ -44,6 +44,7 @@ interface UseFleetTickerReturn {
   secondsUntilNext: number;
   loading: boolean;
   error: string | null;
+  refreshNow: () => Promise<void>;
 }
 
 export function useFleetTicker({
@@ -105,5 +106,7 @@ export function useFleetTicker({
     statuses[t.truckId] = t.currentStatus;
   }
 
-  return { statuses, trucks, secondsUntilNext, loading, error };
+  const refreshNow = useCallback(() => fetchFleet(false), [fetchFleet]);
+
+  return { statuses, trucks, secondsUntilNext, loading, error, refreshNow };
 }

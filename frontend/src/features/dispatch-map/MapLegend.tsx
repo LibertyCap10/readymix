@@ -15,11 +15,11 @@ import { orderStatusColors, truckStatusColors } from '@/theme/statusColors';
 import type { OrderStatus, TruckStatus } from '@/theme/statusColors';
 
 const ORDER_STATUSES: OrderStatus[] = [
-  'pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
+  'pending', 'scheduled', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
 ];
 
 const TRUCK_STATUSES: TruckStatus[] = [
-  'available', 'loading', 'in_transit', 'pouring', 'returning', 'maintenance',
+  'available', 'scheduled', 'loading', 'in_transit', 'pouring', 'returning', 'maintenance',
 ];
 
 export function MapLegend() {

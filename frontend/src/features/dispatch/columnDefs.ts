@@ -16,6 +16,7 @@ import type { Order } from '@/types/domain';
 /** Operational order for status sections (most urgent first). */
 export const STATUS_DISPLAY_ORDER = [
   'pending',
+  'scheduled',
   'dispatched',
   'in_transit',
   'pouring',

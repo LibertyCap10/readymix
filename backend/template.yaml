@@ -327,6 +327,40 @@ Resources:
       RetentionInDays: 14
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # TICKER SERVICE — Advances delivery lifecycle based on stored timelines
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  TickerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub readymix-ticker-${Environment}
+      Description: Advances order/truck lifecycle — EventBridge triggered every 1 minute
+      Handler: index.handler
+      CodeUri: services/ticker/
+      Timeout: 60
+      MemorySize: 256
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TrucksTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlantsTable
+      Events:
+        TickerSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+            Description: Advance delivery lifecycle every minute
+            Enabled: true
+
+  TickerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/readymix-ticker-${Environment}
+      RetentionInDays: 14
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # ANALYTICS SERVICE  (Phase 5: Aurora SQL queries against delivery_history)
   # ═══════════════════════════════════════════════════════════════════════════
 

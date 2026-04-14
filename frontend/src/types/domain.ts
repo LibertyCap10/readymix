@@ -170,6 +170,32 @@ export interface DeliveryEvent {
   userId?: string;
 }
 
+// ─── Order Timeline (computed at dispatch time) ─────────────
+export interface OrderTimeline {
+  scheduledDepartureAt: string;   // ISO — when truck leaves plant
+  loadingCompletesAt: string;     // ISO — departure + loading duration
+  transitArrivalAt: string;       // ISO — loading complete + drive time
+  pourCompletesAt: string;        // ISO — arrival + pour duration
+  returnDepartureAt: string;      // ISO — same as pourCompletesAt
+  returnArrivalAt: string;        // ISO — return departure + drive time
+}
+
+// ─── Route Data (Mapbox snapshot stored at dispatch) ────────
+export interface OrderRouteData {
+  coordinates: [number, number][];   // [[lng, lat], ...] from Mapbox
+  distanceMeters: number;            // total route distance
+  durationSeconds: number;           // Mapbox drive time estimate
+}
+
+// ─── Cancellation (populated on cancel) ─────────────────────
+export interface OrderCancellation {
+  cancelledAt: string;               // ISO — when cancelled
+  positionAtCancel?: [number, number]; // [lng, lat] where truck was
+  estimatedReturnAt?: string;        // ISO — when truck returns to plant
+  returnCoordinates?: [number, number][]; // route back to plant
+  truckReturned?: boolean;           // set by ticker when truck is back at plant
+}
+
 export interface Order {
   ticketNumber: string;
   plantId: string;
@@ -196,6 +222,11 @@ export interface Order {
   events: DeliveryEvent[];
   createdAt: string;       // ISO datetime
   updatedAt: string;       // ISO datetime
+
+  // Server-driven lifecycle fields (populated at dispatch)
+  timeline?: OrderTimeline;
+  routeData?: OrderRouteData;
+  cancellation?: OrderCancellation;
 }
 
 // ─── Analytics ───────────────────────────────────────────

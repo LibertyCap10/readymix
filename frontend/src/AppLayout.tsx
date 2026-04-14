@@ -17,6 +17,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import ScienceIcon from '@mui/icons-material/Science';
 import MapIcon from '@mui/icons-material/Map';
 import { PlantSelector } from './components/PlantSelector';
+import { LiveClock } from './components/LiveClock';
 import { usePlant } from './context/PlantContext';
 
 const navItems = [
@@ -61,6 +62,8 @@ export default function AppLayout() {
 
           {/* Mobile: spacer to push plant selector right */}
           {isMobile && <Box sx={{ flexGrow: 1 }} />}
+
+          <LiveClock />
 
           <PlantSelector
             plants={allPlants}

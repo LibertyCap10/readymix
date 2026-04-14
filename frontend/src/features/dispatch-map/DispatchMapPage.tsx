@@ -16,6 +16,7 @@ import { MapView } from './MapView';
 import { SidePanel } from './SidePanel';
 import { BottomSheet } from './BottomSheet';
 import { AssignTruckDialog } from './AssignTruckDialog';
+import { TimelineProvider } from '@/features/timeline/TimelineContext';
 import type { Order, Truck } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 
@@ -35,7 +36,9 @@ export function DispatchMapPage() {
     selectedDate,
     setSelectedDate,
     updateOrderStatus,
-    assignTruck,
+    refreshFleet,
+    isToday,
+    isPastDate,
   } = useDispatchMap();
 
   // Filters — applied to allOrders so status filtering works across all statuses
@@ -72,10 +75,27 @@ export function DispatchMapPage() {
 
   const handleDoAssign = useCallback(
     async (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => {
-      await assignTruck(ticketNumber, truckId, truckNumber, driverName);
-      await updateOrderStatus(ticketNumber, 'dispatched');
+      const route = routes[ticketNumber];
+
+      // Pass route data so the backend can compute and store the delivery timeline
+      const routeData = route ? {
+        coordinates: route.coordinates,
+        distanceMeters: route.distance,
+        durationSeconds: route.duration,
+      } : undefined;
+
+      // Single atomic call: assign truck + set scheduled + pass route data
+      // This ensures the backend updates both the order and truck table in one operation
+      await updateOrderStatus(ticketNumber, 'scheduled', undefined, routeData, {
+        assignedTruckId: truckId,
+        assignedTruckNumber: truckNumber,
+        driverName,
+      });
+
+      // Immediately refresh fleet so the truck status updates in the UI
+      await refreshFleet();
     },
-    [assignTruck, updateOrderStatus],
+    [updateOrderStatus, routes, refreshFleet],
   );
 
   const handleUpdateStatus = useCallback(
@@ -123,14 +143,26 @@ export function DispatchMapPage() {
     />
   );
 
+  const timelineWrapper = (content: React.ReactNode) => (
+    <TimelineProvider
+      orders={allOrders}
+      plant={plant}
+      routes={routes}
+      isToday={isToday}
+    >
+      {content}
+    </TimelineProvider>
+  );
+
   if (isMobile) {
-    return (
+    return timelineWrapper(
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         {toolbar}
         <Box sx={{ flex: 1, position: 'relative', minHeight: 0 }}>
           <MapView
             plant={plant}
             orders={mappableFilteredOrders}
+            allOrders={allOrders}
             trucks={trucks}
             routes={routes}
             selectedTicket={selectedTicket}
@@ -140,6 +172,8 @@ export function DispatchMapPage() {
             onTruckSelect={handleTruckSelect}
             onAssignTruck={handleAssignTruck}
             onUpdateStatus={handleUpdateStatus}
+            isToday={isToday}
+            isPastDate={isPastDate}
           />
           <BottomSheet orders={filters.filteredOrders} onOrderSelect={handleOrderSelect} />
           <AssignTruckDialog
@@ -151,11 +185,11 @@ export function DispatchMapPage() {
             onAssign={handleDoAssign}
           />
         </Box>
-      </Box>
+      </Box>,
     );
   }
 
-  return (
+  return timelineWrapper(
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {toolbar}
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -163,6 +197,7 @@ export function DispatchMapPage() {
           <MapView
             plant={plant}
             orders={mappableFilteredOrders}
+            allOrders={allOrders}
             trucks={trucks}
             routes={routes}
             selectedTicket={selectedTicket}
@@ -195,6 +230,6 @@ export function DispatchMapPage() {
         allTrucks={allTrucks}
         onAssign={handleDoAssign}
       />
-    </Box>
+    </Box>,
   );
 }

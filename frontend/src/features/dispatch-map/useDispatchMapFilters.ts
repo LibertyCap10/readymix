@@ -10,11 +10,11 @@ import type { Order } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 
 const ALL_STATUSES: OrderStatus[] = [
-  'pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
+  'pending', 'scheduled', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
 ];
 
 const DEFAULT_STATUSES = new Set<OrderStatus>([
-  'pending', 'dispatched', 'in_transit', 'pouring', 'returning',
+  'pending', 'scheduled', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
 ]);
 
 export function useDispatchMapFilters(allOrders: Order[]) {
@@ -24,7 +24,7 @@ export function useDispatchMapFilters(allOrders: Order[]) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hotLoadOnly, setHotLoadOnly] = useState(false);
   const [showTrucks, setShowTrucks] = useState(true);
-  const [showAllRoutes, setShowAllRoutes] = useState(false);
+  const [showAllRoutes, setShowAllRoutes] = useState(true);
 
   const deferredSearch = useDeferredValue(searchQuery);
 

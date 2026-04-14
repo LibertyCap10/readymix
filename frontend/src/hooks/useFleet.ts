@@ -18,12 +18,13 @@ export interface UseFleetReturn {
   error: string | null;
   secondsUntilNext: number;  // countdown for live-update badge
   statusCounts: Record<TruckStatus, number>; // pre-computed for bar chart
+  refreshFleet: () => Promise<void>;  // trigger immediate refresh (e.g., after assignment)
 }
 
 export function useFleet(): UseFleetReturn {
   const { selectedPlant } = usePlant();
 
-  const { trucks: apiTrucks, secondsUntilNext, loading, error } = useFleetTicker({
+  const { trucks: apiTrucks, secondsUntilNext, loading, error, refreshNow } = useFleetTicker({
     plantId: selectedPlant.plantId,
   });
 
@@ -64,6 +65,7 @@ export function useFleet(): UseFleetReturn {
     () => {
       const counts: Record<TruckStatus, number> = {
         available:   0,
+        scheduled:   0,
         loading:     0,
         in_transit:  0,
         pouring:     0,
@@ -84,5 +86,6 @@ export function useFleet(): UseFleetReturn {
     error,
     secondsUntilNext,
     statusCounts,
+    refreshFleet: refreshNow,
   };
 }

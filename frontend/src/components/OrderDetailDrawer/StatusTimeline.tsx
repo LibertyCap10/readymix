@@ -28,6 +28,7 @@ interface StatusTimelineProps {
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending:    'Order Created',
+  scheduled:  'Scheduled',
   dispatched: 'Dispatched',
   in_transit: 'In Transit',
   pouring:    'Pouring',

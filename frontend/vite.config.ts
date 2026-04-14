@@ -13,12 +13,34 @@ export default defineConfig({
     port: 3000,
     open: true,
     proxy: {
-      '/orders': 'http://localhost:3001',
-      '/fleet': 'http://localhost:3001',
-      '/analytics': 'http://localhost:3001',
+      // SPA routes that collide with API paths need bypass to serve
+      // index.html for browser navigations (Accept: text/html)
+      '/orders': {
+        target: 'http://localhost:3001',
+        bypass(req) {
+          if (req.headers.accept?.includes('text/html')) return '/index.html';
+        },
+      },
+      '/fleet': {
+        target: 'http://localhost:3001',
+        bypass(req) {
+          if (req.headers.accept?.includes('text/html')) return '/index.html';
+        },
+      },
+      '/analytics': {
+        target: 'http://localhost:3001',
+        bypass(req) {
+          if (req.headers.accept?.includes('text/html')) return '/index.html';
+        },
+      },
+      '/mix-designs': {
+        target: 'http://localhost:3001',
+        bypass(req) {
+          if (req.headers.accept?.includes('text/html')) return '/index.html';
+        },
+      },
       '/customers': 'http://localhost:3001',
       '/plants': 'http://localhost:3001',
-      '/mix-designs': 'http://localhost:3001',
     },
   },
 });

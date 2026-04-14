@@ -23,7 +23,7 @@ import type { Order } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 
 const STATUS_ORDER: OrderStatus[] = [
-  'pending', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
+  'pending', 'scheduled', 'dispatched', 'in_transit', 'pouring', 'returning', 'complete', 'cancelled',
 ];
 
 interface SidePanelProps {

@@ -16,7 +16,8 @@ import dayjs from 'dayjs';
 // Valid status transitions — dispatchers can only move forward
 // (or cancel from any non-terminal state).
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  pending:    ['dispatched', 'cancelled'],
+  pending:    ['scheduled', 'cancelled'],
+  scheduled:  ['dispatched', 'pending', 'cancelled'],
   dispatched: ['in_transit', 'cancelled'],
   in_transit: ['pouring', 'cancelled'],
   pouring:    ['returning', 'cancelled'],
@@ -38,8 +39,9 @@ export interface UseOrdersReturn {
   selectedDate: string;          // ISO date string "YYYY-MM-DD"
   setSelectedDate: (d: string) => void;
   createOrder: (draft: NewOrderDraft) => Promise<Order>;
-  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string) => Promise<void>;
+  updateOrderStatus: (ticketNumber: string, status: OrderStatus, note?: string, routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number }, truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string }) => Promise<void>;
   assignTruck: (ticketNumber: string, truckId: string, truckNumber: string, driverName: string) => Promise<void>;
+  updateRequestedTime: (ticketNumber: string, newRequestedTime: string) => Promise<void>;
 }
 
 // Everything the caller must supply to create a new order
@@ -71,27 +73,36 @@ export function useOrders(): UseOrdersReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch orders when plant or date changes
+  // Fetch orders when plant or date changes, then poll every 15 seconds
+  // to pick up ticker-driven status changes
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
-    api.get<{ orders: Order[]; count: number }>('/orders', {
-      plantId: selectedPlant.plantId,
-      date: selectedDate,
-    })
-      .then((data) => {
-        if (!cancelled) setOrders(data.orders);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message ?? 'Failed to load orders');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    const fetchOrders = (isInitial = false) => {
+      if (isInitial) {
+        setLoading(true);
+        setError(null);
+      }
 
-    return () => { cancelled = true; };
+      api.get<{ orders: Order[]; count: number }>('/orders', {
+        plantId: selectedPlant.plantId,
+        date: selectedDate,
+      })
+        .then((data) => {
+          if (!cancelled) setOrders(data.orders);
+        })
+        .catch((err) => {
+          if (!cancelled && isInitial) setError(err.message ?? 'Failed to load orders');
+        })
+        .finally(() => {
+          if (!cancelled && isInitial) setLoading(false);
+        });
+    };
+
+    fetchOrders(true);
+    const pollId = setInterval(() => fetchOrders(false), 15_000);
+
+    return () => { cancelled = true; clearInterval(pollId); };
   }, [selectedPlant.plantId, selectedDate]);
 
   // ── createOrder ─────────────────────────────────────────────────────────────
@@ -111,6 +122,8 @@ export function useOrders(): UseOrdersReturn {
     ticketNumber: string,
     newStatus: OrderStatus,
     note?: string,
+    routeData?: { coordinates: [number, number][]; distanceMeters: number; durationSeconds: number },
+    truckAssignment?: { assignedTruckId: string; assignedTruckNumber: string; driverName: string },
   ) => {
     // Optimistic validation
     const existing = orders.find((o) => o.ticketNumber === ticketNumber);
@@ -120,9 +133,17 @@ export function useOrders(): UseOrdersReturn {
     }
 
     try {
+      const body: Record<string, unknown> = { status: newStatus, note };
+      if (routeData) body.routeData = routeData;
+      if (truckAssignment) {
+        body.assignedTruckId = truckAssignment.assignedTruckId;
+        body.assignedTruckNumber = truckAssignment.assignedTruckNumber;
+        body.driverName = truckAssignment.driverName;
+      }
+
       const updated = await api.patch<Order>(
         `/orders/${ticketNumber}`,
-        { status: newStatus, note },
+        body,
         { plantId: selectedPlant.plantId, date: selectedDate },
       );
 
@@ -158,6 +179,27 @@ export function useOrders(): UseOrdersReturn {
     }
   }, [selectedPlant.plantId, selectedDate]);
 
+  // ── updateRequestedTime (pending orders only) ───────────────────────────────
+  const updateRequestedTime = useCallback(async (
+    ticketNumber: string,
+    newRequestedTime: string,
+  ) => {
+    try {
+      const updated = await api.patch<Order>(
+        `/orders/${ticketNumber}`,
+        { requestedTime: newRequestedTime },
+        { plantId: selectedPlant.plantId, date: selectedDate },
+      );
+
+      setOrders((prev) =>
+        prev.map((o) => (o.ticketNumber === ticketNumber ? updated : o))
+      );
+    } catch (err: unknown) {
+      const apiErr = err as { status?: number; message?: string };
+      setError(apiErr.message ?? 'Failed to update requested time');
+    }
+  }, [selectedPlant.plantId, selectedDate]);
+
   return {
     orders,
     loading,
@@ -167,5 +209,6 @@ export function useOrders(): UseOrdersReturn {
     createOrder,
     updateOrderStatus,
     assignTruck,
+    updateRequestedTime,
   };
 }

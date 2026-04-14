@@ -1,5 +1,6 @@
 export type OrderStatus =
   | 'pending'
+  | 'scheduled'
   | 'dispatched'
   | 'in_transit'
   | 'pouring'
@@ -9,6 +10,7 @@ export type OrderStatus =
 
 export type TruckStatus =
   | 'available'
+  | 'scheduled'
   | 'loading'
   | 'in_transit'
   | 'pouring'
@@ -23,6 +25,7 @@ export interface StatusColor {
 
 export const orderStatusColors: Record<OrderStatus, StatusColor> = {
   pending: { background: '#FFF8E1', text: '#F57F17', label: 'Pending' },
+  scheduled: { background: '#EDE7F6', text: '#4527A0', label: 'Scheduled' },
   dispatched: { background: '#E3F2FD', text: '#1565C0', label: 'Dispatched' },
   in_transit: { background: '#E8EAF6', text: '#283593', label: 'In Transit' },
   pouring: { background: '#FBE9E7', text: '#D84315', label: 'Pouring' },
@@ -33,6 +36,7 @@ export const orderStatusColors: Record<OrderStatus, StatusColor> = {
 
 export const truckStatusColors: Record<TruckStatus, StatusColor> = {
   available: { background: '#E8F5E9', text: '#2E7D32', label: 'Available' },
+  scheduled: { background: '#EDE7F6', text: '#4527A0', label: 'Scheduled' },
   loading: { background: '#FFF8E1', text: '#F57F17', label: 'Loading' },
   in_transit: { background: '#E8EAF6', text: '#283593', label: 'In Transit' },
   pouring: { background: '#FBE9E7', text: '#D84315', label: 'Pouring' },

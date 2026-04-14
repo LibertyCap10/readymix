@@ -49,6 +49,7 @@ type StatusFilter = OrderStatus | 'all';
 const FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all',       label: 'All' },
   { value: 'pending',   label: 'Pending' },
+  { value: 'scheduled', label: 'Scheduled' },
   { value: 'dispatched',label: 'Dispatched' },
   { value: 'in_transit',label: 'In Transit' },
   { value: 'pouring',   label: 'Pouring' },
@@ -70,6 +71,7 @@ export function OrdersPage() {
     selectedDate,
     setSelectedDate,
     createOrder,
+    updateRequestedTime,
   } = useOrders();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -264,6 +266,7 @@ export function OrdersPage() {
         order={selectedOrder}
         open={drawerOpen}
         onClose={handleDrawerClose}
+        onUpdateRequestedTime={updateRequestedTime}
       />
 
       {/* ── New Order Dialog ───────────────────────────────────────────── */}

@@ -28,7 +28,7 @@ jest.mock('ag-charts-react', () => ({
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const EMPTY_COUNTS: Record<TruckStatus, number> = {
-  available: 0, loading: 0, in_transit: 0,
+  available: 0, scheduled: 0, loading: 0, in_transit: 0,
   pouring: 0,   returning: 0, maintenance: 0,
 };
 

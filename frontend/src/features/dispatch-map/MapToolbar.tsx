@@ -33,6 +33,7 @@ import type { OrderStatus } from '@/theme/statusColors';
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: 'pending',    label: 'Pending' },
+  { value: 'scheduled',  label: 'Scheduled' },
   { value: 'dispatched', label: 'Dispatched' },
   { value: 'in_transit', label: 'In Transit' },
   { value: 'pouring',    label: 'Pouring' },

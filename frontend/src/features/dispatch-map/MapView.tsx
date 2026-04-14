@@ -18,6 +18,8 @@ import PlaceIcon from '@mui/icons-material/Place';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { StatusChip } from '@/components/StatusChip';
 import { MapLegend } from './MapLegend';
+import { PlantPopup } from './PlantPopup';
+import { useTimeline, formatEta, phaseLabel, phaseEtaLabel } from '@/features/timeline/TimelineContext';
 import { orderStatusColors, truckStatusColors } from '@/theme/statusColors';
 import type { Order, Truck, Plant } from '@/types/domain';
 import type { OrderStatus, TruckStatus } from '@/theme/statusColors';
@@ -29,6 +31,7 @@ const MAPBOX_TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN ?? '') as string;
 interface MapViewProps {
   plant: Plant;
   orders: Order[];
+  allOrders: Order[];
   trucks: Truck[];
   routes: Record<string, RouteData>;
   selectedTicket: string | null;
@@ -38,6 +41,8 @@ interface MapViewProps {
   onTruckSelect: (truck: Truck) => void;
   onAssignTruck: (order: Order) => void;
   onUpdateStatus: (ticketNumber: string, status: OrderStatus) => void;
+  isToday?: boolean;
+  isPastDate?: boolean;
   sidePanelHidden?: boolean;
   onToggleSidePanel?: () => void;
 }
@@ -77,7 +82,8 @@ function buildRouteGeoJSON(
 // ─── Status action helpers ──────────────────────────────────────────────────
 
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  pending: 'dispatched',
+  pending: 'scheduled',
+  scheduled: 'dispatched',
   dispatched: 'in_transit',
   in_transit: 'pouring',
   pouring: 'returning',
@@ -86,9 +92,12 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
+const AT_PLANT_STATUSES = new Set(['available', 'scheduled', 'loading', 'maintenance']);
+
 export function MapView({
   plant,
   orders,
+  allOrders,
   trucks,
   routes,
   selectedTicket,
@@ -98,9 +107,12 @@ export function MapView({
   onTruckSelect,
   onAssignTruck,
   onUpdateStatus,
+  isToday = true,
+  isPastDate = false,
   sidePanelHidden,
   onToggleSidePanel,
 }: MapViewProps) {
+  const simulation = useTimeline();
   const mapRef = useRef<MapRef>(null);
 
   const [viewState, setViewState] = useState({
@@ -110,6 +122,23 @@ export function MapView({
   });
   const [popupOrder, setPopupOrder] = useState<Order | null>(null);
   const [popupTruck, setPopupTruck] = useState<Truck | null>(null);
+  const [popupPlant, setPopupPlant] = useState(false);
+
+  // Trucks physically at the plant (including those in loading phase)
+  const trucksAtPlant = useMemo(
+    () => trucks.filter(t => {
+      if (!AT_PLANT_STATUSES.has(t.currentStatus)) return false;
+      const entry = simulation.getEntryByTruck(t.truckId);
+      // No simulation entry → at plant. Loading phase → physically at plant.
+      return !entry || entry.phase === 'loading';
+    }),
+    [trucks, simulation],
+  );
+
+  const trucksAtPlantIds = useMemo(
+    () => new Set(trucksAtPlant.map(t => t.truckId)),
+    [trucksAtPlant],
+  );
 
   // Resize map when side panel is toggled so it fills the available space
   useEffect(() => {
@@ -124,6 +153,7 @@ export function MapView({
   const handleMapClick = useCallback(() => {
     setPopupOrder(null);
     setPopupTruck(null);
+    setPopupPlant(false);
   }, []);
 
   // Determine which route tickets to render
@@ -208,53 +238,136 @@ export function MapView({
         {/* ── Plant marker ──────────────────────────────────────────── */}
         <Marker longitude={plant.longitude} latitude={plant.latitude} anchor="center">
           <Box
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              setPopupPlant(true);
+              setPopupOrder(null);
+              setPopupTruck(null);
+            }}
             sx={{
               width: 36,
               height: 36,
               borderRadius: '50%',
-              bgcolor: '#37474F',
+              bgcolor: isPastDate ? '#9E9E9E' : '#37474F',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               border: '3px solid white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              cursor: 'pointer',
+              position: 'relative',
+              opacity: isPastDate ? 0.7 : 1,
             }}
           >
             <FactoryIcon sx={{ color: 'white', fontSize: 18 }} />
-          </Box>
-        </Marker>
-
-        {/* ── Truck markers ─────────────────────────────────────────── */}
-        {showTrucks && trucks.map(truck => {
-          const color = truckStatusColors[truck.currentStatus as TruckStatus]?.text ?? '#666';
-          return (
-            <Marker
-              key={truck.truckId}
-              longitude={truck.longitude!}
-              latitude={truck.latitude!}
-              anchor="center"
-              onClick={(e: { originalEvent: MouseEvent }) => { e.originalEvent.stopPropagation(); handleTruckClick(truck); }}
-            >
+            {trucksAtPlant.length > 0 && (
               <Box
                 sx={{
-                  width: 30,
-                  height: 30,
+                  position: 'absolute',
+                  top: -6,
+                  right: -8,
+                  bgcolor: isPastDate ? '#9E9E9E' : '#2E7D32',
+                  color: 'white',
                   borderRadius: '50%',
-                  bgcolor: color,
+                  width: 18,
+                  height: 18,
+                  fontSize: 10,
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  border: '2px solid white',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-                  cursor: 'pointer',
-                  animation: truck.currentStatus === 'in_transit' ? 'pulse 2s infinite' : undefined,
-                  '@keyframes pulse': {
-                    '0%, 100%': { transform: 'scale(1)' },
-                    '50%': { transform: 'scale(1.15)' },
-                  },
+                  border: '1.5px solid white',
                 }}
               >
-                <LocalShippingIcon sx={{ color: 'white', fontSize: 16 }} />
+                {trucksAtPlant.length}
+              </Box>
+            )}
+          </Box>
+        </Marker>
+
+        {/* ── Truck markers (excludes trucks at plant) ────────────────── */}
+        {showTrucks && trucks.filter(t => !trucksAtPlantIds.has(t.truckId)).map((truck, idx) => {
+          const simPos = simulation.getTruckPosition(truck.truckId);
+          const simStatus = simulation.getTruckStatus(truck.truckId) as TruckStatus | null;
+
+          // Determine position: simulated > available-at-plant > API fallback
+          let lng: number;
+          let lat: number;
+          if (simPos) {
+            lng = simPos.lng;
+            lat = simPos.lat;
+          } else if (truck.currentStatus === 'available') {
+            // Cluster available trucks around the plant in a small circle
+            const angle = (idx / trucks.length) * 2 * Math.PI;
+            const offsetRadius = 0.003; // ~300m spread
+            lng = plant.longitude + Math.cos(angle) * offsetRadius;
+            lat = plant.latitude + Math.sin(angle) * offsetRadius;
+          } else if (truck.longitude != null && truck.latitude != null) {
+            lng = truck.longitude;
+            lat = truck.latitude;
+          } else {
+            return null; // No position available
+          }
+
+          const effectiveStatus = simStatus ?? truck.currentStatus;
+          const color = isPastDate ? '#9E9E9E' : (truckStatusColors[effectiveStatus as TruckStatus]?.text ?? '#666');
+          const isMoving = isToday && (effectiveStatus === 'in_transit' || effectiveStatus === 'returning');
+          const simEntry = simulation.getEntryByTruck(truck.truckId);
+          const etaSeconds = simEntry ? simulation.getEtaSeconds(simEntry) : 0;
+          const showEta = isToday && simEntry && simEntry.phase !== 'complete';
+
+          return (
+            <Marker
+              key={truck.truckId}
+              longitude={lng}
+              latitude={lat}
+              anchor="center"
+              onClick={(e: { originalEvent: MouseEvent }) => { e.originalEvent.stopPropagation(); handleTruckClick(truck); }}
+            >
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* ETA label above truck */}
+                {showEta && (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      fontFamily: 'monospace',
+                      color: '#fff',
+                      bgcolor: 'rgba(0,0,0,0.75)',
+                      borderRadius: 0.5,
+                      px: 0.5,
+                      py: 0.1,
+                      mb: 0.3,
+                      lineHeight: 1.3,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {isMoving ? `ETA ${formatEta(etaSeconds)}` : `${formatEta(etaSeconds)}`}
+                  </Typography>
+                )}
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: '50%',
+                    bgcolor: color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid white',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.3s',
+                    animation: isMoving ? 'pulse 2s infinite' : undefined,
+                    '@keyframes pulse': {
+                      '0%, 100%': { transform: 'scale(1)' },
+                      '50%': { transform: 'scale(1.15)' },
+                    },
+                  }}
+                >
+                  <LocalShippingIcon sx={{ color: 'white', fontSize: 16 }} />
+                </Box>
               </Box>
             </Marker>
           );
@@ -305,98 +418,177 @@ export function MapView({
         })}
 
         {/* ── Order popup ───────────────────────────────────────────── */}
-        {popupOrder && popupOrder.jobSiteLatitude != null && popupOrder.jobSiteLongitude != null && (
-          <Popup
-            longitude={popupOrder.jobSiteLongitude}
-            latitude={popupOrder.jobSiteLatitude}
-            anchor="top"
-            onClose={() => setPopupOrder(null)}
-            closeButton
-            closeOnClick={false}
-            maxWidth="280px"
-          >
-            <Box sx={{ p: 0.5, minWidth: 220 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                <Typography variant="subtitle2" fontWeight={700}>{popupOrder.ticketNumber}</Typography>
-                <StatusChip status={popupOrder.status} variant="order" />
-              </Box>
-              <Typography variant="caption" display="block" color="text.secondary">
-                {popupOrder.customerName}
-              </Typography>
-              <Typography variant="caption" display="block" color="text.secondary">
-                {popupOrder.jobSiteName}
-              </Typography>
-              <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
-                {popupOrder.mixDesignName} -- {popupOrder.volume} yd{'\u00b3'}
-              </Typography>
+        {popupOrder && popupOrder.jobSiteLatitude != null && popupOrder.jobSiteLongitude != null && (() => {
+          const orderEntry = simulation.getEntryByTicket(popupOrder.ticketNumber);
+          const orderEta = orderEntry ? simulation.getEtaSeconds(orderEntry) : 0;
 
-              {/* Route info */}
-              {routes[popupOrder.ticketNumber] && (
-                <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
-                  {(routes[popupOrder.ticketNumber].distance / 1609.34).toFixed(1)} mi
-                  {' -- '}
-                  {Math.round(routes[popupOrder.ticketNumber].duration / 60)} min drive
+          return (
+            <Popup
+              longitude={popupOrder.jobSiteLongitude}
+              latitude={popupOrder.jobSiteLatitude}
+              anchor="top"
+              onClose={() => setPopupOrder(null)}
+              closeButton
+              closeOnClick={false}
+              maxWidth="300px"
+            >
+              <Box sx={{ p: 0.5, minWidth: 220 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>{popupOrder.ticketNumber}</Typography>
+                  <StatusChip status={popupOrder.status} variant="order" />
+                </Box>
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {popupOrder.customerName}
                 </Typography>
-              )}
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {popupOrder.jobSiteName}
+                </Typography>
+                <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.5 }}>
+                  {popupOrder.mixDesignName} -- {popupOrder.volume} yd{'\u00b3'}
+                </Typography>
 
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                {popupOrder.status === 'pending' && (
-                  <Button size="small" variant="contained" onClick={() => onAssignTruck(popupOrder)}>
-                    Assign Truck
-                  </Button>
+                {/* Route info */}
+                {routes[popupOrder.ticketNumber] && (
+                  <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 0.5 }}>
+                    {(routes[popupOrder.ticketNumber].distance / 1609.34).toFixed(1)} mi
+                    {' -- '}
+                    {Math.round(routes[popupOrder.ticketNumber].duration / 60)} min drive
+                  </Typography>
                 )}
-                {NEXT_STATUS[popupOrder.status] && popupOrder.status !== 'pending' && (
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => onUpdateStatus(popupOrder.ticketNumber, NEXT_STATUS[popupOrder.status]!)}
-                  >
-                    {orderStatusColors[NEXT_STATUS[popupOrder.status]!]?.label ?? 'Next'}
-                  </Button>
+
+                {/* Assigned truck info + live simulation status */}
+                {popupOrder.assignedTruckNumber && (
+                  <Box sx={{ p: 0.5, bgcolor: 'grey.50', borderRadius: 1, mb: 0.5 }}>
+                    <Typography variant="caption" display="block" fontWeight={600} color="text.primary">
+                      Truck {popupOrder.assignedTruckNumber} -- {popupOrder.driverName}
+                    </Typography>
+                    {orderEntry && (
+                      <Typography variant="caption" display="block" fontWeight={600} sx={{ color: 'primary.main' }}>
+                        {phaseEtaLabel(orderEntry.phase, orderEta)}
+                      </Typography>
+                    )}
+                    {!orderEntry && popupOrder.status !== 'pending' && (
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        {phaseLabel(popupOrder.status === 'dispatched' ? 'loading' : popupOrder.status === 'in_transit' ? 'in_transit_outbound' : popupOrder.status)}
+                      </Typography>
+                    )}
+                  </Box>
                 )}
-                {!['complete', 'cancelled'].includes(popupOrder.status) && (
-                  <Button
-                    size="small"
-                    color="error"
-                    onClick={() => onUpdateStatus(popupOrder.ticketNumber, 'cancelled')}
-                  >
-                    Cancel
-                  </Button>
-                )}
+
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  {popupOrder.status === 'pending' && (
+                    <Button size="small" variant="contained" onClick={() => onAssignTruck(popupOrder)}>
+                      Assign Truck
+                    </Button>
+                  )}
+                  {NEXT_STATUS[popupOrder.status] && !['pending', 'scheduled'].includes(popupOrder.status) && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => onUpdateStatus(popupOrder.ticketNumber, NEXT_STATUS[popupOrder.status]!)}
+                    >
+                      {orderStatusColors[NEXT_STATUS[popupOrder.status]!]?.label ?? 'Next'}
+                    </Button>
+                  )}
+                  {!['complete', 'cancelled'].includes(popupOrder.status) && (
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => onUpdateStatus(popupOrder.ticketNumber, 'cancelled')}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </Box>
               </Box>
-            </Box>
-          </Popup>
-        )}
+            </Popup>
+          );
+        })()}
 
         {/* ── Truck popup ───────────────────────────────────────────── */}
-        {popupTruck && popupTruck.latitude != null && popupTruck.longitude != null && (
-          <Popup
-            longitude={popupTruck.longitude}
-            latitude={popupTruck.latitude}
-            anchor="top"
-            onClose={() => setPopupTruck(null)}
-            closeButton
-            closeOnClick={false}
-            maxWidth="260px"
-          >
-            <Box sx={{ p: 0.5, minWidth: 200 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                <Typography variant="subtitle2" fontWeight={700}>Truck {popupTruck.truckNumber}</Typography>
-                <StatusChip status={popupTruck.currentStatus} variant="truck" />
-              </Box>
-              <Typography variant="caption" display="block" color="text.secondary">
-                {popupTruck.driver.name}
-              </Typography>
-              <Typography variant="caption" display="block" color="text.secondary">
-                {popupTruck.capacity} yd{'\u00b3'} capacity -- {popupTruck.loadsToday} loads today
-              </Typography>
-              {popupTruck.currentJobSite && (
+        {popupTruck && (simulation.getTruckPosition(popupTruck.truckId) ?? (popupTruck.latitude != null && popupTruck.longitude != null ? { lng: popupTruck.longitude, lat: popupTruck.latitude } : null)) && (() => {
+          const pos = simulation.getTruckPosition(popupTruck.truckId);
+          const popupLng = pos?.lng ?? popupTruck.longitude!;
+          const popupLat = pos?.lat ?? popupTruck.latitude!;
+          const truckEntry = simulation.getEntryByTruck(popupTruck.truckId);
+          const truckEta = truckEntry ? simulation.getEtaSeconds(truckEntry) : 0;
+          const effectiveTruckStatus = (simulation.getTruckStatus(popupTruck.truckId) ?? popupTruck.currentStatus) as TruckStatus;
+          const linkedOrder = truckEntry ? orders.find(o => o.ticketNumber === truckEntry.ticketNumber) : null;
+          const routeInfo = truckEntry ? routes[truckEntry.ticketNumber] : null;
+
+          return (
+            <Popup
+              longitude={popupLng}
+              latitude={popupLat}
+              anchor="top"
+              onClose={() => setPopupTruck(null)}
+              closeButton
+              closeOnClick={false}
+              maxWidth="300px"
+            >
+              <Box sx={{ p: 0.5, minWidth: 220 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Typography variant="subtitle2" fontWeight={700}>Truck {popupTruck.truckNumber}</Typography>
+                  <StatusChip status={effectiveTruckStatus} variant="truck" />
+                </Box>
                 <Typography variant="caption" display="block" color="text.secondary">
-                  At: {popupTruck.currentJobSite}
+                  {popupTruck.driver.name}
                 </Typography>
-              )}
-            </Box>
-          </Popup>
+                <Typography variant="caption" display="block" color="text.secondary">
+                  {popupTruck.capacity} yd{'\u00b3'} capacity -- {popupTruck.loadsToday} loads today
+                </Typography>
+
+                {/* Simulation-driven phase & ETA */}
+                {truckEntry && (
+                  <Box sx={{ mt: 0.5, p: 0.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="caption" display="block" fontWeight={600} color="text.primary">
+                      {phaseEtaLabel(truckEntry.phase, truckEta)}
+                    </Typography>
+                    {routeInfo && (
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        {(routeInfo.distance / 1609.34).toFixed(1)} mi -- {Math.round(routeInfo.duration / 60)} min drive
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+
+                {/* Linked order info */}
+                {linkedOrder && (
+                  <Box sx={{ mt: 0.5, pt: 0.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Typography variant="caption" display="block" fontWeight={600} color="text.primary">
+                      {linkedOrder.ticketNumber}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      {linkedOrder.customerName} -- {linkedOrder.jobSiteName}
+                    </Typography>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      {linkedOrder.mixDesignName} -- {linkedOrder.volume} yd{'\u00b3'}
+                    </Typography>
+                  </Box>
+                )}
+
+                {/* Fallback for non-simulated trucks */}
+                {!truckEntry && popupTruck.currentJobSite && (
+                  <Typography variant="caption" display="block" color="text.secondary">
+                    At: {popupTruck.currentJobSite}
+                  </Typography>
+                )}
+              </Box>
+            </Popup>
+          );
+        })()}
+
+        {/* ── Plant popup ──────────────────────────────────────────── */}
+        {popupPlant && (
+          <PlantPopup
+            plant={plant}
+            trucks={trucks}
+            orders={allOrders}
+            onClose={() => setPopupPlant(false)}
+            onAssignTruck={onAssignTruck}
+            isToday={isToday}
+            isPastDate={isPastDate}
+          />
         )}
       </Map>
 

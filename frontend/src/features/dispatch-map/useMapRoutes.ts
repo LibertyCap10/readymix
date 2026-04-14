@@ -23,8 +23,10 @@ export function useMapRoutes(
   const [routes, setRoutes] = useState<Record<string, RouteData>>({});
   const cacheRef = useRef<Record<string, RouteData>>({});
 
+  // Fetch routes for active orders AND pending orders (needed for dispatch)
+  const activeStatuses = new Set(['pending', 'dispatched', 'in_transit', 'pouring', 'returning']);
   const routeOrders = orders.filter(
-    o => (o.status === 'dispatched' || o.status === 'in_transit') &&
+    o => activeStatuses.has(o.status) &&
       o.jobSiteLatitude != null && o.jobSiteLongitude != null,
   );
 
