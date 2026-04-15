@@ -10,8 +10,9 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 
 | View | Description |
 |---|---|
-| **Orders Board** | Today's delivery orders grouped by status, filterable by date and status. Assign trucks, update status, and create new orders from a form-validated dialog. Click any row to open a full-detail drawer with customer info, mix design, and status timeline. |
-| **Dispatch Map** | Mapbox-powered real-time map view of today's deliveries. Plant, truck, and job-site markers with status-colored indicators. Driving routes from Mapbox Directions API for dispatched/in-transit orders. One-click truck assignment, status updates, and cancellation from map popups. Collapsible side panel on desktop, bottom sheet on mobile. |
+| **Landing Page** | Public-facing feature showcase with animated Mapbox demo map. Entry point at `/`. |
+| **Orders Board** | Today's delivery orders grouped by status, filterable by date and status. Assign trucks, update status, delete orders, and create new orders from a form-validated dialog. Click any row to open a full-detail drawer with customer info, mix design, and status timeline. |
+| **Dispatch Map** | Mapbox-powered real-time map view of today's deliveries. Plant, truck, and job-site markers with status-colored indicators. Driving routes from Mapbox Directions API for dispatched/in-transit orders. One-click truck assignment, status updates, and cancellation from map popups. Collapsible side panel on desktop, bottom sheet on mobile. Toggle to a **Schedule Gantt** view showing each truck as a row with time-positioned order blocks, a now marker, and an unassigned orders sidebar. |
 | **Mix Designs** | Browse, create, and edit concrete mix recipes. AG Grid table with PSI, slump range, cost, and recommended application tags (driveway, foundation, sidewalk, etc.). Click any row for a full ingredient/admixture breakdown. Filter by application type or toggle inactive mixes. |
 | **Fleet View** | Live truck status updated every 10 seconds. Three AG Charts panels (bar: status distribution, line: 7-day cycle time trend, donut: fleet utilization %). AG Grid truck roster showing driver, capacity, current job site, and last washout. |
 | **Analytics** | Historical volume trends, on-time delivery rates, and customer reports from Aurora PostgreSQL. |
@@ -44,21 +45,21 @@ A concrete delivery dispatch and fleet management dashboard — the kind of inte
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                           FRONTEND                              │
-│         React 18 + MUI v6 + AG Grid v35 + AG Charts v13         │
-│         Vite dev server  ·  Storybook  ·  Jest + RTL            │
-│                                                                 │
-│  /mixes        /fleet          /orders         /dispatch        /analytics    │
-│  MixesPage     FleetPage       OrdersPage      DispatchMapPage  AnalyticsPage │
-│  ├─ MixGrid    ├─ StatusChart  ├─ OrderGrid    ├─ MapView (Mapbox)            │
-│  ├─ MixCards   ├─ CycleChart   ├─ MobileList   ├─ SidePanel / BottomSheet     │
-│  ├─ MixForm    ├─ UtilChart    ├─ NewOrder     ├─ AssignTruckDialog           │
-│  └─ MixDrawer  └─ TruckRoster └─ OrderDrawer  └─ Route lines + popups        │
-│                                                                               │
-│  Data hooks: useMixDesigns · useFleet · useOrders · useDispatchMap · useAnalytics │
-│  Simulation engine: timeline-driven order lifecycle + route interpolation         │
-└─────────────────────────────┬───────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                           FRONTEND                                                                │
+│         React 18 + MUI v6 + AG Grid v35 + AG Charts v13                                           │
+│         Vite dev server  ·  Storybook  ·  Jest + RTL                                              │
+│                                                                                                   │
+│  /             /mixes        /fleet          /orders         /dispatch        /analytics          │
+│  LandingPage   MixesPage     FleetPage       OrdersPage      DispatchMapPage  AnalyticsPage       │
+│  ├─ MixGrid    ├─ StatusChart  ├─ OrderGrid    ├─ MapView (Mapbox)                                │
+│  ├─ MixCards   ├─ CycleChart   ├─ MobileList   ├─ SidePanel / BottomSheet                         │
+│  ├─ MixForm    ├─ UtilChart    ├─ NewOrder     ├─ ScheduleGantt (Gantt view)                      │
+│  └─ MixDrawer  └─ TruckRoster └─ OrderDrawer  └─ Route lines + popups                             │
+│                                                                                                   │
+│  Data hooks: useMixDesigns · useFleet · useOrders · useDispatchMap · useAnalytics                 │
+│  Simulation engine: timeline-driven order lifecycle + route interpolation                         │
+└─────────────────────────────┬─────────────────────────────────────────────────────────────────────┘
                               │ REST / JSON
                               │ AWS API Gateway
                  ┌────────────┼────────────┐
@@ -130,25 +131,35 @@ readymix/
 │   │   ├── AppLayout.tsx                 # AppBar + nav tabs + PlantSelector
 │   │   ├── main.tsx                      # React root; registers AG Grid + AG Charts modules
 │   │   ├── components/
+│   │   │   ├── DetailRow.tsx             # Label–value row for detail drawers
+│   │   │   ├── EmptyState.tsx            # Illustration + message for empty views
+│   │   │   ├── ErrorBoundary.tsx         # Catches render errors per route
 │   │   │   ├── LiveClock.tsx             # Real-time clock display
+│   │   │   ├── Logo.tsx                  # ReadyMix logo component
 │   │   │   ├── OrderDetailDrawer/        # Order detail side panel + StatusTimeline
+│   │   │   ├── PageHeader.tsx            # Consistent page title + action bar
 │   │   │   ├── PlantSelector/            # Plant Autocomplete dropdown
+│   │   │   ├── SectionHeader.tsx         # Section divider with title
+│   │   │   ├── SkeletonLoader.tsx        # Loading skeletons for grids and cards
 │   │   │   ├── StatusChip/               # Order + truck status badges
 │   │   │   └── TruckCard/                # Fleet member summary card
 │   │   ├── context/
 │   │   │   └── PlantContext.tsx          # Selected plant; localStorage persistence
 │   │   ├── features/
+│   │   │   ├── analytics/               # AnalyticsPage, KpiCards, VolumeChart,
+│   │   │   │   └── ...                   # CycleTimeChart, CustomerTable, DriverTable
 │   │   │   ├── dispatch/                 # OrdersPage (AG Grid order board),
 │   │   │   │   ├── cellRenderers/        # NewOrderDialog, orderValidation, columnDefs
 │   │   │   │   └── ...                   # cell renderers: Status, TruckAssignment, Time, HotLoad
 │   │   │   ├── dispatch-map/             # DispatchMapPage (Mapbox map), MapView,
-│   │   │   │   └── ...                   # SidePanel, BottomSheet, PlantPopup, AssignTruckDialog, hooks
-│   │   │   ├── mixes/                    # MixesPage, MixDesignGrid, MobileMixList,
-│   │   │   │   └── ...                   # MixDesignDetailDrawer, MixDesignFormDialog
+│   │   │   │   └── ...                   # SidePanel, BottomSheet, AssignTruckDialog, ScheduleGantt toggle
 │   │   │   ├── fleet/                    # FleetPage, FleetStatusChart, CycleTimeChart,
 │   │   │   │   └── ...                   # UtilizationChart, TruckRoster, useFleetTicker
-│   │   │   ├── analytics/               # AnalyticsPage, KpiCards, VolumeChart,
-│   │   │   │   └── ...                   # CycleTimeChart, CustomerTable, DriverTable
+│   │   │   ├── landing/                  # LandingPage, DemoMap (public feature showcase)
+│   │   │   ├── mixes/                    # MixesPage, MixDesignGrid, MobileMixList,
+│   │   │   │   └── ...                   # MixDesignDetailDrawer, MixDesignFormDialog
+│   │   │   ├── schedule/                 # ScheduleGantt, TruckRow, TimeAxis, NowMarker,
+│   │   │   │   └── ...                   # ScheduleLegend, UnassignedSidebar
 │   │   │   ├── simulation/              # Timeline-driven order lifecycle engine,
 │   │   │   │   └── ...                   # route geometry interpolation, SimulationContext
 │   │   │   └── timeline/                # TimelineContext provider
@@ -169,7 +180,7 @@ readymix/
 │   ├── samconfig.toml                    # SAM deployment config (fill in after --guided)
 │   ├── package.json                      # Jest config + devDependencies for backend tests
 │   ├── services/
-│   │   ├── orders/                       # GET/POST/PATCH orders; customer search; mix design CRUD
+│   │   ├── orders/                       # GET/POST/PATCH/DELETE orders; schedule; customer search; mix design CRUD
 │   │   │   ├── index.mjs
 │   │   │   └── index.test.mjs
 │   │   ├── fleet/                        # GET fleet roster; PATCH real-time truck status
@@ -187,23 +198,10 @@ readymix/
 │       └── seed-dynamodb.mjs             # Seed all 3 tables with data matching frontend mocks
 ├── deploy-aws.sh                          # Full AWS deploy (SAM + S3 + CDN invalidation)
 ├── deploy-local.sh                        # Local dev: SAM local + seed + Vite dev server
-├── database/                             
-│   ├── schema.sql                        # Full Aurora PostgreSQL schema
-│   └── seed.sql                          # Reference data seed
-└── docs/
-    ├── project-overview.md               # Domain primer, data architecture, API routes
-    ├── aws-setup.md                      # AWS deployment walkthrough (SAM CLI → production)
-    ├── aws-setup-aurora.md               # Aurora Serverless v2 provisioning guide
-    └── review/                           # Deep-dive notes on every major technology
-        ├── 01-react-vite-typescript.md
-        ├── 02-material-ui-theming.md
-        ├── 03-storybook-overview.md
-        ├── 04-ag-grid-deep-dive.md
-        ├── 05-react-patterns.md
-        ├── 06-ag-charts-overview.md
-        ├── 07-sam-infrastructure-as-code.md
-        ├── 08-dynamodb-data-modeling.md
-        └── 09-lambda-architecture.md
+└── database/                             
+    ├── schema.sql                        # Full Aurora PostgreSQL schema
+    └── seed.sql                          # Reference data seed
+
 ```
 
 ---
@@ -303,6 +301,8 @@ REST API served by AWS API Gateway + Lambda.
 | `GET` | `/orders/:ticketId` | DynamoDB | Single active order |
 | `POST` | `/orders` | DynamoDB + Aurora | Create ticket (FK-validate customer/plant/mix against Aurora) |
 | `PATCH` | `/orders/:ticketId` | DynamoDB | Update status, assign truck, add note |
+| `DELETE` | `/orders/:ticketId` | DynamoDB | Delete an order |
+| `GET` | `/schedule?plantId&date` | Aurora + DynamoDB | Daily truck schedule for the Gantt view |
 
 ### Fleet Service
 

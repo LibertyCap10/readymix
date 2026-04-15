@@ -597,6 +597,10 @@ Resources:
         function handler(event) {
           var request = event.request;
           var uri = request.uri;
+          if (uri === '/storybook' || uri === '/storybook/') {
+            request.uri = '/storybook/index.html';
+            return request;
+          }
           if (uri.startsWith('/storybook/')) return request;
           if (uri.includes('.')) return request;
           request.uri = '/index.html';
