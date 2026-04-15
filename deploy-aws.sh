@@ -93,22 +93,31 @@ if [ "$SKIP_BACKEND" = false ]; then
   # ── Build ───────────────────────────────────────────────────────────────
   step "Building backend (SAM)"
   cd "$BACKEND_DIR"
-  sam build --cached --parallel 2>&1 | tail -5
+  sam build --parallel 2>&1 | tail -5
   ok "Backend built"
 
   # ── Deploy ──────────────────────────────────────────────────────────────
   step "Deploying backend to AWS"
 
-  sam deploy \
+  DEPLOY_OUTPUT=$(sam deploy \
     --stack-name "$STACK_NAME" \
     --region "$REGION" \
     --parameter-overrides "Environment=$ENVIRONMENT" \
     --capabilities CAPABILITY_IAM \
     --resolve-s3 \
     --s3-prefix "$STACK_NAME" \
-    --fail-on-empty-changeset false \
+    --force-upload \
+    --no-fail-on-empty-changeset \
     --no-confirm-changeset \
-    --tags "Project=readymix" "Environment=$ENVIRONMENT"
+    --tags "Project=readymix" "Environment=$ENVIRONMENT" 2>&1) || {
+    if echo "$DEPLOY_OUTPUT" | grep -q "No changes to deploy"; then
+      warn "No backend changes to deploy — stack is up to date"
+    else
+      echo "$DEPLOY_OUTPUT"
+      fail "SAM deploy failed"
+    fi
+  }
+  echo "$DEPLOY_OUTPUT" | tail -5
 
   ok "Backend deployed"
 else
@@ -166,10 +175,15 @@ if [ "$SKIP_FRONTEND" = false ]; then
   npm run build 2>&1 | tail -5
   ok "Frontend built (dist/)"
 
+  step "Building Storybook"
+  npx storybook build -o dist/storybook 2>&1 | tail -5
+  ok "Storybook built (dist/storybook/)"
+
   # ── Upload to S3 ────────────────────────────────────────────────────────
   step "Uploading to S3"
   aws s3 sync dist/ "s3://$BUCKET" \
     --delete \
+    --exact-timestamps \
     --region "$REGION" \
     2>&1 | tail -5
   ok "S3 sync complete"
@@ -198,9 +212,10 @@ SECS=$(( ELAPSED % 60 ))
 echo ""
 echo -e "${GREEN}${BOLD}  Deploy complete!${NC}  (${MINS}m ${SECS}s)"
 echo ""
-echo -e "  ${CYAN}App:${NC}      https://readymix.earth"
-echo -e "  ${CYAN}CDN:${NC}      $FRONTEND_URL"
-echo -e "  ${CYAN}API:${NC}      $API_URL"
+echo -e "  ${CYAN}App:${NC}        https://readymix.earth"
+echo -e "  ${CYAN}Storybook:${NC}  https://readymix.earth/storybook/"
+echo -e "  ${CYAN}CDN:${NC}        $FRONTEND_URL"
+echo -e "  ${CYAN}API:${NC}        $API_URL"
 echo ""
 
 if [ "$SKIP_BACKEND" = false ]; then

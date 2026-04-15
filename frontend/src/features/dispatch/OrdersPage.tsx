@@ -2,16 +2,14 @@
  * DispatchPage — the main dispatch board.
  *
  * Layout:
- *   ┌─ Toolbar ────────────────────────────────────────────────┐
- *   │  [Date Picker]  [Status chips: All | Pending | ...]  [+ New Order]
+ *   ┌─ PageHeader ────────────────────────────────────────────┐
+ *   │  [Date Picker]  Day · Stats          [+ New Order]      │
+ *   │  [Status chips: All | Pending | ...]                    │
  *   └──────────────────────────────────────────────────────────┘
- *   ┌─ Grid (desktop) / Card list (mobile ≤768px) ─────────────┐
- *   │                                                           │
+ *   ┌─ Grid (desktop) / Card list (mobile ≤900px) ────────────┐
+ *   │                                                          │
  *   └──────────────────────────────────────────────────────────┘
  *   ┌─ OrderDetailDrawer (right side, slides in on row click) ─┐
- *
- * Responsive:
- *   useMediaQuery('(max-width: 768px)') switches from DispatchGrid → MobileOrderList
  */
 
 import { useState, useCallback } from 'react';
@@ -20,17 +18,16 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   IconButton,
   Stack,
   Typography,
   useMediaQuery,
-  Paper,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useOrders } from '@/hooks/useOrders';
@@ -38,6 +35,9 @@ import { DispatchGrid } from './DispatchGrid';
 import { MobileOrderList } from './MobileOrderList';
 import { OrderDetailDrawer } from '@/components/OrderDetailDrawer';
 import { NewOrderDialog } from './NewOrderDialog';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonGrid, SkeletonCards } from '@/components/SkeletonLoader';
 import type { Order } from '@/types/domain';
 import type { OrderStatus } from '@/theme/statusColors';
 import { orderStatusColors } from '@/theme/statusColors';
@@ -62,7 +62,7 @@ const FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
 
 export function OrdersPage() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md')); // ≤900px
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const {
     orders,
@@ -127,61 +127,18 @@ export function OrdersPage() {
     [createOrder]
   );
 
+  const dayOfWeek = dayjs(selectedDate).format('dddd');
+  const totalVolume = orders.reduce((s, o) => s + o.volume, 0).toFixed(1);
+
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <Paper
-        elevation={0}
-        sx={{
-          px: { xs: 1.5, md: 2.5 },
-          py: 1,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          flexShrink: 0,
-        }}
-      >
-        {/* Row 1: Date picker + stats + New Order button */}
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-          sx={{ mb: 0.75 }}
-        >
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <IconButton
-              size="small"
-              onClick={handlePrevDay}
-              sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
-            >
-              <ChevronLeftIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-            <DatePicker
-              value={dayjs(selectedDate)}
-              onChange={handleDateChange}
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { width: { xs: 140, sm: 170 } },
-                },
-              }}
-            />
-            <IconButton
-              size="small"
-              onClick={handleNextDay}
-              sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
-            >
-              <ChevronRightIcon sx={{ fontSize: 20 }} />
-            </IconButton>
-          </Stack>
-
-          <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-            {orders.length} orders · {orders.reduce((s, o) => s + o.volume, 0).toFixed(1)} yd³
-          </Typography>
-
-          <Box sx={{ flex: 1 }} />
-
+      {/* ── Page Header ────────────────────────────────────────────── */}
+      <PageHeader
+        title="Orders"
+        subtitle={dayOfWeek}
+        rightContent={
           <Button
             variant="contained"
             color="secondary"
@@ -192,48 +149,107 @@ export function OrdersPage() {
           >
             {isMobile ? <AddIcon /> : 'New Order'}
           </Button>
-        </Stack>
+        }
+        bottomContent={
+          <Box>
+            {/* Date picker + stats row */}
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <IconButton
+                  size="small"
+                  onClick={handlePrevDay}
+                  sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+                >
+                  <ChevronLeftIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+                <DatePicker
+                  value={dayjs(selectedDate)}
+                  onChange={handleDateChange}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      sx: { width: { xs: 140, sm: 170 } },
+                    },
+                  }}
+                />
+                <IconButton
+                  size="small"
+                  onClick={handleNextDay}
+                  sx={{ width: 32, height: 32, border: '1px solid', borderColor: 'divider' }}
+                >
+                  <ChevronRightIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </Stack>
 
-        {/* Row 2: Status filter chips — horizontally scrollable */}
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 0.5,
-            overflowX: 'auto',
-            pb: 0.25,
-            '&::-webkit-scrollbar': { display: 'none' },
-          }}
-        >
-          {FILTER_OPTIONS.map(({ value, label }) => {
-            const count = value === 'all' ? orders.length : (countByStatus[value] ?? 0);
-            const isActive = statusFilter === value;
-            const colors = value !== 'all' ? orderStatusColors[value as OrderStatus] : undefined;
-
-            return (
-              <Chip
-                key={value}
-                label={`${label}${count > 0 ? ` (${count})` : ''}`}
-                onClick={() => setStatusFilter(value)}
-                size="small"
+              <Box
                 sx={{
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  fontWeight: isActive ? 700 : 400,
-                  fontSize: { xs: '0.7rem', sm: '0.8125rem' },
-                  height: { xs: 26, sm: 32 },
-                  bgcolor: isActive ? (colors?.background ?? 'primary.main') : 'transparent',
-                  color: isActive ? (colors?.text ?? 'primary.contrastText') : 'text.secondary',
+                  bgcolor: 'grey.50',
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 99,
                   border: '1px solid',
-                  borderColor: isActive ? (colors?.text ?? 'primary.main') : 'divider',
-                  '&:hover': {
-                    bgcolor: colors?.background ?? 'action.hover',
-                  },
+                  borderColor: 'divider',
                 }}
-              />
-            );
-          })}
-        </Box>
-      </Paper>
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontVariantNumeric: 'tabular-nums', fontSize: { xs: '0.75rem', sm: '0.875rem' } }}
+                >
+                  <Typography component="span" variant="body2" fontWeight={700} color="text.primary">
+                    {orders.length}
+                  </Typography>{' '}
+                  orders{' \u00b7 '}
+                  <Typography component="span" variant="body2" fontWeight={700} color="text.primary">
+                    {totalVolume}
+                  </Typography>{' '}
+                  yd³
+                </Typography>
+              </Box>
+            </Stack>
+
+            {/* Status filter chips */}
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 0.5,
+                overflowX: 'auto',
+                pb: 0.25,
+                '&::-webkit-scrollbar': { display: 'none' },
+              }}
+            >
+              {FILTER_OPTIONS.map(({ value, label }) => {
+                const count = value === 'all' ? orders.length : (countByStatus[value] ?? 0);
+                const isActive = statusFilter === value;
+                const colors = value !== 'all' ? orderStatusColors[value as OrderStatus] : undefined;
+
+                return (
+                  <Chip
+                    key={value}
+                    label={`${label}${count > 0 ? ` (${count})` : ''}`}
+                    onClick={() => setStatusFilter(value)}
+                    size="small"
+                    sx={{
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      fontWeight: isActive ? 700 : 400,
+                      fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                      height: { xs: 26, sm: 32 },
+                      bgcolor: isActive ? (colors?.background ?? 'primary.main') : 'transparent',
+                      color: isActive ? (colors?.text ?? 'primary.contrastText') : 'text.secondary',
+                      border: '1px solid',
+                      borderColor: isActive ? (colors?.text ?? 'primary.main') : 'divider',
+                      '&:hover': {
+                        bgcolor: colors?.background ?? 'action.hover',
+                      },
+                    }}
+                  />
+                );
+              })}
+            </Box>
+          </Box>
+        }
+      />
 
       {/* ── Error banner ───────────────────────────────────────────── */}
       {error && (
@@ -245,16 +261,28 @@ export function OrdersPage() {
       {/* ── Grid / Card list ──────────────────────────────────────────── */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: isMobile ? 'auto' : 'hidden' }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
+          isMobile ? <SkeletonCards count={4} /> : <SkeletonGrid rows={6} />
         ) : filteredOrders.length === 0 ? (
-          <Box sx={{ py: 8, textAlign: 'center' }}>
-            <Typography color="text.secondary" variant="body1">
-              No {statusFilter !== 'all' ? statusFilter.replace('_', ' ') + ' ' : ''}orders
-              for {dayjs(selectedDate).format('MMMM D, YYYY')}.
-            </Typography>
-          </Box>
+          <EmptyState
+            icon={ViewListIcon}
+            title="No orders found"
+            description={
+              statusFilter !== 'all'
+                ? `No ${statusFilter.replace('_', ' ')} orders for ${dayjs(selectedDate).format('MMMM D, YYYY')}.`
+                : `No orders for ${dayjs(selectedDate).format('MMMM D, YYYY')}.`
+            }
+            action={
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddIcon />}
+                size="small"
+                onClick={handleNewOrder}
+              >
+                New Order
+              </Button>
+            }
+          />
         ) : isMobile ? (
           <MobileOrderList orders={filteredOrders} onOrderClick={handleOrderClick} />
         ) : (

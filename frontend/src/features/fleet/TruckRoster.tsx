@@ -132,9 +132,10 @@ const columnDefs: ColDef<Truck>[] = [
 
 interface TruckRosterProps {
   trucks: Truck[];
+  quickFilterText?: string;
 }
 
-export function TruckRoster({ trucks }: TruckRosterProps) {
+export function TruckRoster({ trucks, quickFilterText }: TruckRosterProps) {
   const defaultColDef = useMemo<ColDef<Truck>>(() => ({
     resizable: true,
   }), []);
@@ -160,6 +161,7 @@ export function TruckRoster({ trucks }: TruckRosterProps) {
         animateRows
         getRowId={(p) => p.data.truckId}
         suppressCellFocus={false}
+        quickFilterText={quickFilterText}
       />
     </Box>
   );

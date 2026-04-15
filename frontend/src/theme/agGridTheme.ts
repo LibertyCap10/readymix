@@ -9,4 +9,5 @@ export const agGridTheme = themeQuartz.withParams({
   headerFontWeight: 600,
   selectedRowBackgroundColor: '#E3F2FD', // MUI blue-50 — clear but not distracting
   oddRowBackgroundColor: '#FAFAFA',      // Subtle alternating rows
+  rowHoverColor: 'rgba(255, 109, 0, 0.04)', // Warm orange tint on hover
 });

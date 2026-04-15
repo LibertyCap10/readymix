@@ -3,6 +3,7 @@ import { AgGridReact } from 'ag-grid-react';
 import type { ColDef } from 'ag-grid-community';
 import { Box, Typography } from '@mui/material';
 import type { DriverScore } from '@/hooks/useAnalyticsDashboard';
+import { agGridTheme } from '@/theme/agGridTheme';
 
 interface Props {
   data: DriverScore[];
@@ -56,14 +57,15 @@ export function DriverTable({ data }: Props) {
   }
 
   return (
-    <div className="ag-theme-quartz" style={{ height: '100%', width: '100%' }}>
+    <Box sx={{ width: '100%' }}>
       <AgGridReact<DriverScore>
+        theme={agGridTheme}
         rowData={data}
         columnDefs={columnDefs}
         defaultColDef={{ sortable: true, resizable: true }}
         domLayout="autoHeight"
         suppressCellFocus
       />
-    </div>
+    </Box>
   );
 }

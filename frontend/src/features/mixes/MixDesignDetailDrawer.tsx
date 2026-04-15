@@ -2,7 +2,7 @@
  * MixDesignDetailDrawer — right-side drawer showing full mix design detail.
  *
  * Sections:
- *   1. Header — code, name, PSI badge, active indicator
+ *   1. Header — code, name, PSI badge, active indicator (slate background)
  *   2. Overview — description, slump, yield, cost
  *   3. Applications — pour type chips
  *   4. Ingredients — table
@@ -12,7 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Drawer,
+  SwipeableDrawer,
   Box,
   Typography,
   IconButton,
@@ -27,32 +27,8 @@ import CircleIcon from '@mui/icons-material/Circle';
 import { POUR_TYPE_LABELS } from '@/types/domain';
 import type { MixDesign } from '@/types/domain';
 import type { UseMixDesignsReturn } from '@/hooks/useMixDesigns';
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <Typography
-      variant="overline"
-      sx={{ color: 'text.secondary', letterSpacing: 1.2, display: 'block', mb: 0.5 }}
-    >
-      {children}
-    </Typography>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', py: 0.5 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 120 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 500, textAlign: 'right' }}>
-        {value}
-      </Typography>
-    </Box>
-  );
-}
+import { SectionHeader } from '@/components/SectionHeader';
+import { DetailRow } from '@/components/DetailRow';
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -95,43 +71,50 @@ export function MixDesignDetailDrawer({
   };
 
   return (
-    <Drawer
+    <SwipeableDrawer
       anchor="right"
       open={open}
       onClose={onClose}
+      onOpen={() => {}}
+      disableSwipeToOpen
+      SlideProps={{ timeout: 250 }}
+      ModalProps={{
+        slotProps: { backdrop: { sx: { backdropFilter: 'blur(2px)' } } },
+      }}
       PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}
     >
       {!mix ? null : (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          {/* ── Header ──────────────────────────────────────────────── */}
+          {/* ── Header (slate background — matches OrderDetailDrawer) ── */}
           <Box
             sx={{
               px: 2.5,
-              py: 2,
+              py: 1.5,
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
               display: 'flex',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               justifyContent: 'space-between',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
+              flexShrink: 0,
             }}
           >
             <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
                 <Typography variant="h6" fontWeight={700} sx={{ fontFamily: 'monospace' }}>
                   {mix.code}
                 </Typography>
-                <CircleIcon sx={{ fontSize: 10, color: mix.isActive ? 'success.main' : 'text.disabled' }} />
+                <CircleIcon sx={{ fontSize: 10, color: mix.isActive ? 'success.light' : 'grey.500' }} />
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ opacity: 0.85 }}>
                 {mix.name}
               </Typography>
               <Chip
                 label={`${mix.psi.toLocaleString()} PSI`}
                 size="small"
-                sx={{ mt: 0.75, fontWeight: 600, bgcolor: '#37474F', color: '#fff' }}
+                sx={{ mt: 0.75, fontWeight: 600, bgcolor: 'rgba(255,255,255,0.15)', color: '#fff' }}
               />
             </Box>
-            <IconButton onClick={onClose} size="small">
+            <IconButton onClick={onClose} size="small" sx={{ color: 'primary.contrastText' }}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -145,7 +128,7 @@ export function MixDesignDetailDrawer({
             ) : detail ? (
               <>
                 {/* Overview */}
-                <SectionHeader>Overview</SectionHeader>
+                <SectionHeader sx={{ mt: 0 }}>Overview</SectionHeader>
                 {detail.description && (
                   <Typography variant="body2" sx={{ mb: 1 }}>
                     {detail.description}
@@ -162,8 +145,8 @@ export function MixDesignDetailDrawer({
                 {/* Applications */}
                 {detail.applications.length > 0 && (
                   <>
-                    <Divider sx={{ my: 1.5 }} />
-                    <SectionHeader>Recommended Applications</SectionHeader>
+                    <Divider sx={{ my: 2 }} />
+                    <SectionHeader sx={{ mt: 0 }}>Recommended Applications</SectionHeader>
                     <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mb: 1 }}>
                       {detail.applications.map(pt => (
                         <Chip
@@ -178,8 +161,8 @@ export function MixDesignDetailDrawer({
                 )}
 
                 {/* Ingredients */}
-                <Divider sx={{ my: 1.5 }} />
-                <SectionHeader>Ingredients (per yd\u00b3)</SectionHeader>
+                <Divider sx={{ my: 2 }} />
+                <SectionHeader sx={{ mt: 0 }}>Ingredients (per yd\u00b3)</SectionHeader>
                 <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                   {detail.ingredients.length > 0 ? (
                     detail.ingredients.map(ing => (
@@ -195,8 +178,8 @@ export function MixDesignDetailDrawer({
                 {/* Admixtures */}
                 {detail.admixtures.length > 0 && (
                   <>
-                    <Divider sx={{ my: 1.5 }} />
-                    <SectionHeader>Admixtures</SectionHeader>
+                    <Divider sx={{ my: 2 }} />
+                    <SectionHeader sx={{ mt: 0 }}>Admixtures</SectionHeader>
                     <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                       {detail.admixtures.map(adm => (
                         <Typography key={adm.name} variant="caption" display="block" color="text.secondary">
@@ -244,6 +227,6 @@ export function MixDesignDetailDrawer({
           </Box>
         </Box>
       )}
-    </Drawer>
+    </SwipeableDrawer>
   );
 }

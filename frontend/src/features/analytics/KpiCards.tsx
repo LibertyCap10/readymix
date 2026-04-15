@@ -1,4 +1,5 @@
-import { Grid2, Paper, Typography, Box } from '@mui/material';
+import { Grid2, Paper, Typography, Box, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TimerIcon from '@mui/icons-material/Timer';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -21,6 +22,9 @@ interface KpiDef {
 }
 
 export function KpiCards({ totalVolume, avgCycleTime, benchmarkMinutes, onTimePct, utilizationPct }: Props) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const cycleColor = avgCycleTime <= benchmarkMinutes ? '#2E7D32' : '#D84315';
   const onTimeColor = onTimePct >= 90 ? '#2E7D32' : onTimePct >= 75 ? '#F57F17' : '#D84315';
 
@@ -68,6 +72,11 @@ export function KpiCards({ totalVolume, avgCycleTime, benchmarkMinutes, onTimePc
               borderRadius: 2,
               borderLeft: '4px solid',
               borderLeftColor: kpi.color,
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              },
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -76,7 +85,7 @@ export function KpiCards({ totalVolume, avgCycleTime, benchmarkMinutes, onTimePc
                 {kpi.label}
               </Typography>
             </Box>
-            <Typography variant="h4" fontWeight={700} sx={{ color: kpi.color }}>
+            <Typography variant={isMobile ? 'h5' : 'h4'} fontWeight={700} sx={{ color: kpi.color }}>
               {kpi.value}
             </Typography>
             <Typography variant="caption" color="text.secondary">

@@ -2,13 +2,12 @@
  * MixesPage — dedicated tab for browsing, creating, and editing mix designs.
  *
  * Layout:
- *   ┌─ Toolbar ─────────────────────────────────────────────────────┐
- *   │  "Mix Designs" · plant · count · [Application chips] [+ New] │
- *   ├───────────────────────────────────────────────────────────────┤
- *   │  AG Grid (desktop) / Card list (mobile)                      │
- *   └───────────────────────────────────────────────────────────────┘
- *   ┌─ MixDesignDetailDrawer (slides in on row click) ─────────────┐
- *   ┌─ MixDesignFormDialog (modal for create / edit) ──────────────┐
+ *   ┌─ PageHeader ─────────────────────────────────────────────┐
+ *   │  "Mix Designs" · plant · count · [Show inactive] [+ New] │
+ *   │  [Application chips: All | Driveway | Sidewalk | ...]     │
+ *   ├───────────────────────────────────────────────────────────┤
+ *   │  AG Grid (desktop) / Card list (mobile)                  │
+ *   └──────────────────────────────────────────────────────────┘
  */
 
 import { useState, useCallback } from 'react';
@@ -17,7 +16,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   FormControlLabel,
   Paper,
   Switch,
@@ -26,12 +24,16 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
+import ScienceIcon from '@mui/icons-material/Science';
 import { usePlant } from '@/context/PlantContext';
 import { useMixDesigns } from '@/hooks/useMixDesigns';
 import { MixDesignGrid } from './MixDesignGrid';
 import { MobileMixList } from './MobileMixList';
 import { MixDesignDetailDrawer } from './MixDesignDetailDrawer';
 import { MixDesignFormDialog } from './MixDesignFormDialog';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
+import { SkeletonGrid, SkeletonCards } from '@/components/SkeletonLoader';
 import type { MixDesign, MixDesignDraft, PourType } from '@/types/domain';
 
 // ─── Filter chip config ──────────────────────────────────────────────────────
@@ -46,6 +48,18 @@ const APPLICATION_CHIPS: Array<{ value: PourType; label: string }> = [
   { value: 'footing', label: 'Footing' },
   { value: 'grade_beam', label: 'Grade Beam' },
 ];
+
+// Softer colors for pour type chips when active
+const POUR_TYPE_COLORS: Record<PourType, { bg: string; text: string }> = {
+  driveway: { bg: '#E3F2FD', text: '#1565C0' },
+  sidewalk: { bg: '#E8F5E9', text: '#2E7D32' },
+  slab: { bg: '#FFF3E0', text: '#E65100' },
+  foundation: { bg: '#EDE7F6', text: '#4527A0' },
+  wall: { bg: '#E0F2F1', text: '#00695C' },
+  column: { bg: '#FCE4EC', text: '#AD1457' },
+  footing: { bg: '#E8EAF6', text: '#283593' },
+  grade_beam: { bg: '#FFF8E1', text: '#F57F17' },
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -115,80 +129,78 @@ export function MixesPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
       {/* ── Page header / toolbar ──────────────────────────────────── */}
-      <Box
-        sx={{
-          px: { xs: 1.5, md: 2.5 },
-          py: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: { xs: 1, md: 2 },
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          flexShrink: 0,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Typography variant="h6" fontWeight={700}>
-          Mix Designs
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {selectedPlant.name} {'\u00b7'} {mixDesigns.length} design{mixDesigns.length !== 1 ? 's' : ''}
-        </Typography>
-
-        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <FormControlLabel
-            control={
-              <Switch
-                size="small"
-                checked={filters.includeInactive}
-                onChange={(_, checked) => setFilters({ includeInactive: checked })}
-              />
-            }
-            label={<Typography variant="caption">Show inactive</Typography>}
-            sx={{ mr: 0 }}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={handleNewMix}
+      <PageHeader
+        title="Mix Designs"
+        subtitle={`${selectedPlant.name} \u00b7 ${mixDesigns.length} design${mixDesigns.length !== 1 ? 's' : ''}`}
+        rightContent={
+          <>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={filters.includeInactive}
+                  onChange={(_, checked) => setFilters({ includeInactive: checked })}
+                />
+              }
+              label={<Typography variant="caption">Show inactive</Typography>}
+              sx={{ mr: 0 }}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleNewMix}
+            >
+              New Mix
+            </Button>
+          </>
+        }
+        bottomContent={
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.75,
+              flexWrap: 'wrap',
+            }}
           >
-            New Mix
-          </Button>
-        </Box>
-      </Box>
-
-      {/* ── Application filter chips ──────────────────────────────── */}
-      <Box
-        sx={{
-          px: { xs: 1.5, md: 2.5 },
-          py: 0.75,
-          display: 'flex',
-          gap: 0.75,
-          flexWrap: 'wrap',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          flexShrink: 0,
-        }}
-      >
-        <Chip
-          label="All"
-          size="small"
-          variant={!filters.pourType ? 'filled' : 'outlined'}
-          color={!filters.pourType ? 'primary' : 'default'}
-          onClick={() => setFilters({ pourType: undefined })}
-        />
-        {APPLICATION_CHIPS.map(chip => (
-          <Chip
-            key={chip.value}
-            label={chip.label}
-            size="small"
-            variant={filters.pourType === chip.value ? 'filled' : 'outlined'}
-            color={filters.pourType === chip.value ? 'primary' : 'default'}
-            onClick={() => handleApplicationFilter(chip.value)}
-          />
-        ))}
-      </Box>
+            <Chip
+              label="All"
+              size="small"
+              onClick={() => setFilters({ pourType: undefined })}
+              sx={{
+                cursor: 'pointer',
+                fontWeight: !filters.pourType ? 700 : 400,
+                bgcolor: !filters.pourType ? 'primary.main' : 'transparent',
+                color: !filters.pourType ? 'primary.contrastText' : 'text.secondary',
+                border: '1px solid',
+                borderColor: !filters.pourType ? 'primary.main' : 'divider',
+                '&:hover': { bgcolor: !filters.pourType ? 'primary.main' : 'action.hover' },
+              }}
+            />
+            {APPLICATION_CHIPS.map(chip => {
+              const isActive = filters.pourType === chip.value;
+              const colors = POUR_TYPE_COLORS[chip.value];
+              return (
+                <Chip
+                  key={chip.value}
+                  label={chip.label}
+                  size="small"
+                  onClick={() => handleApplicationFilter(chip.value)}
+                  sx={{
+                    cursor: 'pointer',
+                    fontWeight: isActive ? 700 : 400,
+                    bgcolor: isActive ? colors.bg : 'transparent',
+                    color: isActive ? colors.text : 'text.secondary',
+                    border: '1px solid',
+                    borderColor: isActive ? colors.text : 'divider',
+                    '&:hover': { bgcolor: colors.bg },
+                  }}
+                />
+              );
+            })}
+          </Box>
+        }
+      />
 
       {/* ── Error banner ──────────────────────────────────────────── */}
       {error && (
@@ -200,9 +212,18 @@ export function MixesPage() {
       {/* ── Content area ──────────────────────────────────────────── */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
+          isMobile ? <SkeletonCards count={4} /> : <SkeletonGrid rows={6} />
+        ) : mixDesigns.length === 0 ? (
+          <EmptyState
+            icon={ScienceIcon}
+            title="No mix designs found"
+            description={filters.pourType ? `No designs matching "${filters.pourType}" application.` : 'No mix designs available for this plant.'}
+            action={
+              <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={handleNewMix}>
+                New Mix
+              </Button>
+            }
+          />
         ) : isMobile ? (
           <MobileMixList mixDesigns={mixDesigns} onMixClick={handleRowClick} />
         ) : (

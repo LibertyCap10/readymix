@@ -585,6 +585,24 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}
 
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub readymix-spa-rewrite-${Environment}
+      AutoPublish: true
+      FunctionConfig:
+        Comment: SPA fallback - rewrite non-file requests to /index.html (skip /storybook/)
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          if (uri.startsWith('/storybook/')) return request;
+          if (uri.includes('.')) return request;
+          request.uri = '/index.html';
+          return request;
+        }
+
   FrontendOAC:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -618,13 +636,9 @@ Resources:
           TargetOriginId: S3Origin
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # CachingOptimized
           Compress: true
-        CustomErrorResponses:
-          - ErrorCode: 403          # S3 returns 403 for missing files
-            ResponseCode: 200       # SPA fallback
-            ResponsePagePath: /index.html
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionMetadata.FunctionARN
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Outputs — values printed after `sam deploy` and available via CloudFormation

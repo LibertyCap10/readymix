@@ -12,7 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Drawer,
+  SwipeableDrawer,
   Box,
   Typography,
   IconButton,
@@ -109,12 +109,17 @@ export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime,
 
   return (
     <>
-    <Drawer
+    <SwipeableDrawer
       anchor="right"
       open={open}
       onClose={onClose}
-      // Keep it in the DOM when closed so content doesn't flash on re-open
-      ModalProps={{ keepMounted: true }}
+      onOpen={() => {}}
+      disableSwipeToOpen
+      SlideProps={{ timeout: 250 }}
+      ModalProps={{
+        keepMounted: true,
+        slotProps: { backdrop: { sx: { backdropFilter: 'blur(2px)' } } },
+      }}
       PaperProps={{
         sx: {
           width: { xs: '100%', sm: 420 },
@@ -342,7 +347,7 @@ export function OrderDetailDrawer({ order, open, onClose, onUpdateRequestedTime,
           <Typography color="text.secondary">No order selected.</Typography>
         </Box>
       )}
-    </Drawer>
+    </SwipeableDrawer>
 
     {/* ── Delete confirmation dialog ─────────────────────────────── */}
     <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>

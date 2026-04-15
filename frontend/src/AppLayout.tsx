@@ -81,7 +81,7 @@ export default function AppLayout() {
           minHeight: 0,
           overflow: 'hidden',
           backgroundColor: 'background.default',
-          pb: isMobile ? '56px' : 0, // space for bottom nav
+          pb: isMobile ? '64px' : 0, // space for bottom nav
         }}
       >
         <Outlet />
@@ -98,13 +98,21 @@ export default function AppLayout() {
             bottom: 0,
             left: 0,
             right: 0,
+            height: 64,
             zIndex: theme.zIndex.appBar,
             borderTop: '1px solid',
             borderColor: 'divider',
+            boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
+            bgcolor: 'background.paper',
           }}
         >
           {navItems.map((item) => (
-            <BottomNavigationAction key={item.path} label={item.label} icon={item.icon} />
+            <BottomNavigationAction
+              key={item.path}
+              label={item.label}
+              icon={item.icon}
+              sx={{ '&.Mui-selected': { color: 'secondary.main' } }}
+            />
           ))}
         </BottomNavigation>
       )}

@@ -27,6 +27,7 @@ import HubIcon from '@mui/icons-material/Hub';
 import StorageIcon from '@mui/icons-material/Storage';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import DemoMap from './DemoMap';
 import Logo from '../../components/Logo';
 
@@ -154,6 +155,12 @@ export default function LandingPage() {
   const featuresReveal = useReveal();
   const archReveal = useReveal();
 
+  // Match body background to landing page so mobile Safari browser chrome is dark
+  useEffect(() => {
+    document.body.style.backgroundColor = '#102027';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, []);
+
   const countValues = [
     useCountUp(4, archReveal.visible),
     useCountUp(3, archReveal.visible),
@@ -189,6 +196,21 @@ export default function LandingPage() {
         <Toolbar sx={{ minHeight: { xs: 48, md: 64 } }}>
           <Logo size={isMobile ? 'sm' : 'md'} />
           <Box sx={{ flexGrow: 1 }} />
+          <IconButton
+            component="a"
+            href="/storybook/"
+            target="_blank"
+            rel="noopener noreferrer"
+            color="inherit"
+            sx={{
+              mr: 0.5,
+              opacity: 0.8,
+              transition: 'opacity 0.2s',
+              '&:hover': { opacity: 1, bgcolor: 'rgba(255,255,255,0.08)' },
+            }}
+          >
+            <AutoStoriesIcon />
+          </IconButton>
           <IconButton
             component="a"
             href="https://github.com/LibertyCap10/readymix"

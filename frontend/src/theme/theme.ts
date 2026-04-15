@@ -1,6 +1,9 @@
 import { createTheme } from '@mui/material/styles';
 
 const theme = createTheme({
+  shape: {
+    borderRadius: 12,
+  },
   palette: {
     primary: {
       main: '#37474F',     // Blue Grey 800 — slate gray, industrial feel
@@ -42,11 +45,26 @@ const theme = createTheme({
     h6: {
       fontWeight: 600,
     },
+    subtitle2: {
+      fontWeight: 700,
+      letterSpacing: '0.02em',
+    },
+    overline: {
+      letterSpacing: '0.1em',
+      fontWeight: 600,
+    },
   },
   components: {
     MuiAppBar: {
       defaultProps: {
         elevation: 1,
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+        },
       },
     },
     MuiCard: {
@@ -55,7 +73,10 @@ const theme = createTheme({
       },
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+          '&:hover': {
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          },
         },
       },
     },
@@ -63,6 +84,12 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           fontWeight: 500,
+          transition: 'all 0.15s ease',
+        },
+        clickable: {
+          '&:hover': {
+            transform: 'translateY(-1px)',
+          },
         },
       },
     },
@@ -71,6 +98,15 @@ const theme = createTheme({
         root: {
           textTransform: 'none',
           fontWeight: 500,
+          transition: 'all 0.15s ease',
+          '&:active': {
+            transform: 'scale(0.98)',
+          },
+        },
+        contained: {
+          '&:hover': {
+            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+          },
         },
       },
     },
@@ -78,6 +114,7 @@ const theme = createTheme({
       styleOverrides: {
         paper: {
           borderRadius: '12px 0 0 12px',
+          boxShadow: '-4px 0 24px rgba(0,0,0,0.08)',
         },
       },
     },
